@@ -8,7 +8,10 @@ export type TelemetryDashboardConfig = {
   pos: number
 }
 
+export type DisplayMode = 'standard' | 'round'
+
 export type ExtraConfig = DongleConfig & {
+  displayMode: DisplayMode
   startPage: 'home' | 'media' | 'maps' | 'telemetry' | 'camera' | 'settings'
   kiosk: boolean
   camera: string

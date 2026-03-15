@@ -1,6 +1,7 @@
 import { FC, PropsWithChildren, useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router'
 import { Nav } from '../navigation'
+import { RoundNav } from '../navigation/RoundNav'
 import { useCarplayStore, useStatusStore } from '@store/store'
 import { AppLayoutProps } from './types'
 import Box from '@mui/material/Box'
@@ -95,6 +96,9 @@ export const AppLayout: FC<PropsWithChildren<AppLayoutProps>> = ({
   // Auto-hide nav on Maps after inactivity
   const hideNav = hideNavHome || (inAutoHideNavPage && mapsNavHidden)
 
+  // Display mode
+  const isRoundDisplay = settings?.displayMode === 'round'
+
   // Steering wheel position
   const isRhd = Number(settings?.hand ?? 0) === 1
   const layoutDirection: 'row' | 'row-reverse' = isRhd ? 'row-reverse' : 'row'
@@ -112,70 +116,89 @@ export const AppLayout: FC<PropsWithChildren<AppLayoutProps>> = ({
         height: '100dvh',
         touchAction: 'none',
         display: 'flex',
-        flexDirection: layoutDirection
+        flexDirection: isRoundDisplay ? 'column' : layoutDirection,
+        ...(isRoundDisplay
+          ? {
+              width: '100dvh',
+              maxWidth: '100dvw',
+              margin: '0 auto',
+              borderRadius: '50%',
+              overflow: 'hidden'
+            }
+          : {})
       }}
     >
-      {/* NAV COLUMN */}
-      <div
-        ref={navRef}
-        id="nav-root"
-        style={{
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          borderRight: isRhd ? undefined : '1px solid #444',
-          borderLeft: isRhd ? '1px solid #444' : undefined,
-          flex: '0 0 auto',
-          position: 'relative',
-          zIndex: 10,
-          opacity: hideNav ? 0 : 1,
-          transform: hideNav ? (isRhd ? 'translateX(10px)' : 'translateX(-10px)') : 'translateX(0)',
-          transition: 'opacity 220ms ease, transform 220ms ease',
-          pointerEvents: hideNav ? 'none' : 'auto'
-        }}
-      >
-        {isVisibleTimeAndWifi && (
-          <div
-            style={{
-              paddingTop: '1rem',
-              background: theme.palette.background.paper
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', flexDirection: 'column' }}>
-              <Typography style={{ fontSize: '1.5rem' }}>{time}</Typography>
+      {/* NAV COLUMN – hidden in round mode */}
+      {!isRoundDisplay && (
+        <div
+          ref={navRef}
+          id="nav-root"
+          style={{
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            borderRight: isRhd ? undefined : '1px solid #444',
+            borderLeft: isRhd ? '1px solid #444' : undefined,
+            flex: '0 0 auto',
+            position: 'relative',
+            zIndex: 10,
+            opacity: hideNav ? 0 : 1,
+            transform: hideNav
+              ? isRhd
+                ? 'translateX(10px)'
+                : 'translateX(-10px)'
+              : 'translateX(0)',
+            transition: 'opacity 220ms ease, transform 220ms ease',
+            pointerEvents: hideNav ? 'none' : 'auto'
+          }}
+        >
+          {isVisibleTimeAndWifi && (
+            <div
+              style={{
+                paddingTop: '1rem',
+                background: theme.palette.background.paper
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', flexDirection: 'column' }}>
+                <Typography style={{ fontSize: '1.5rem' }}>{time}</Typography>
 
-              <div>
-                {network.type === 'wifi' ? (
-                  <WifiIcon fontSize="small" style={{ fontSize: '1rem' }} />
-                ) : !network.online ? (
-                  <WifiOffIcon fontSize="small" style={{ fontSize: '1rem', opacity: 0.7 }} />
-                ) : null}
-              </div>
-            </Box>
+                <div>
+                  {network.type === 'wifi' ? (
+                    <WifiIcon fontSize="small" style={{ fontSize: '1rem' }} />
+                  ) : !network.online ? (
+                    <WifiOffIcon fontSize="small" style={{ fontSize: '1rem', opacity: 0.7 }} />
+                  ) : null}
+                </div>
+              </Box>
+            </div>
+          )}
+
+          {/* Nav should fill remaining height */}
+          <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+            <Nav receivingVideo={receivingVideo} settings={settings} />
           </div>
-        )}
-
-        {/* Nav should fill remaining height */}
-        <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
-          <Nav receivingVideo={receivingVideo} settings={settings} />
         </div>
-      </div>
+      )}
 
       {/* CONTENT COLUMN */}
       <div
         ref={mainRef}
         id="content-root"
-        data-nav-hidden={hideNav ? '1' : '0'}
+        data-nav-hidden={hideNav || isRoundDisplay ? '1' : '0'}
         style={{
           flex: 1,
           minWidth: 0,
           height: '100%',
           position: 'relative',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          ...(isRoundDisplay ? { borderRadius: '50%' } : {})
         }}
       >
         {children}
       </div>
+
+      {/* Floating round nav overlay */}
+      {isRoundDisplay && <RoundNav receivingVideo={receivingVideo} />}
     </div>
   )
 }

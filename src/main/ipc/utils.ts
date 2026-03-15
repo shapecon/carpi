@@ -64,6 +64,13 @@ export function saveSettings(runtimeState: runtimeStateProps, next: Partial<Extr
 
   applyNullDeletes(merged, next)
 
+  // When switching to round display mode, force a square resolution
+  if (merged.displayMode === 'round' && merged.width !== merged.height) {
+    const size = Math.max(merged.width, merged.height, 1080)
+    merged.width = size
+    merged.height = size
+  }
+
   try {
     writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2))
   } catch (e) {

@@ -19,8 +19,9 @@ export function loadConfig(): ExtraConfig {
   const merged: ExtraConfig = {
     ...DEFAULT_CONFIG,
     startPage: 'home',
-    kiosk: true,
+    kiosk: false,
     camera: '',
+    displayMode: 'standard',
     cameraMirror: false,
     nightMode: true,
     audioVolume: 0.95,
@@ -35,6 +36,13 @@ export function loadConfig(): ExtraConfig {
     ...fileConfig,
     bindings: { ...DEFAULT_BINDINGS, ...(fileConfig.bindings || {}) }
   } as ExtraConfig
+
+  // Round display mode forces square resolution
+  if (merged.displayMode === 'round' && merged.width !== merged.height) {
+    const size = Math.max(merged.width, merged.height, 1080)
+    merged.width = size
+    merged.height = size
+  }
 
   if (!merged.dongleIcon120) merged.dongleIcon120 = ICON_120_B64
   if (!merged.dongleIcon180) merged.dongleIcon180 = ICON_180_B64

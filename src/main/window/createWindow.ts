@@ -138,25 +138,25 @@ export function createMainWindow(runtimeState: runtimeStateProps, services: Serv
     }
   })
 
-  if (is.dev) {
-    const gpuWindow = new BrowserWindow({
-      width: 1000,
-      height: 800,
-      title: 'GPU Info',
-      webPreferences: { nodeIntegration: false, contextIsolation: true }
-    })
-    gpuWindow.loadURL('chrome://gpu')
-  }
+  // if (is.dev) {
+  //   const gpuWindow = new BrowserWindow({
+  //     width: 1000,
+  //     height: 800,
+  //     title: 'GPU Info',
+  //     webPreferences: { nodeIntegration: false, contextIsolation: true }
+  //   })
+  //   gpuWindow.loadURL('chrome://gpu')
+  // }
 
-  if (is.dev) {
-    const mediaWindow = new BrowserWindow({
-      width: 1000,
-      height: 800,
-      title: 'GPU Info',
-      webPreferences: { nodeIntegration: false, contextIsolation: true }
-    })
-    mediaWindow.loadURL('chrome://media-internals')
-  }
+  // if (is.dev) {
+  //   const mediaWindow = new BrowserWindow({
+  //     width: 1000,
+  //     height: 800,
+  //     title: 'GPU Info',
+  //     webPreferences: { nodeIntegration: false, contextIsolation: true }
+  //   })
+  //   mediaWindow.loadURL('chrome://media-internals')
+  // }
 }
 
 export function getMainWindow() {

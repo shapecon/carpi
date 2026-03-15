@@ -913,6 +913,7 @@ const CarplayComponent: React.FC<CarplayProps> = ({
         width: '100%',
         height: '100%',
         touchAction: 'none',
+        ...(settings.displayMode === 'round' ? { borderRadius: '50%', overflow: 'hidden' } : {}),
 
         // show as full UI when on "/" OR as overlay when navFocusActive
         visibility: showCarplayOverlay ? 'visible' : 'hidden',

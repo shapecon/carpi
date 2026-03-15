@@ -350,6 +350,24 @@ export const generalSchema: SettingsNode<ExtraConfig> = {
       path: 'mapsEnabled'
     },
     {
+      type: 'select',
+      label: 'Display Mode',
+      labelKey: 'settings.displayMode',
+      path: 'displayMode',
+      displayValue: true,
+      options: [
+        { label: 'Standard', labelKey: 'settings.displayModeStandard', value: 'standard' },
+        { label: 'Round', labelKey: 'settings.displayModeRound', value: 'round' }
+      ],
+      page: {
+        title: 'Display Mode',
+        labelTitle: 'settings.displayMode',
+        description:
+          'Select the display layout. Round mode clips the UI to a circle with floating navigation.',
+        labelDescription: 'settings.displayModeDescription'
+      }
+    },
+    {
       type: 'checkbox',
       label: 'Fullscreen',
       labelKey: 'settings.fullscreen',
