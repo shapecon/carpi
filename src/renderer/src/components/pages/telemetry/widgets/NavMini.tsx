@@ -3,6 +3,7 @@ import { Box, Typography, useTheme } from '@mui/material'
 
 import AccessTimeIcon from '@mui/icons-material/AccessTime'
 import RouteIcon from '@mui/icons-material/Route'
+import SignpostIcon from '@mui/icons-material/Signpost'
 import { useBlinkingTime } from '../../../../hooks/useBlinkingTime'
 import StraightIcon from '@mui/icons-material/Straight'
 import TurnLeftIcon from '@mui/icons-material/TurnLeft'
@@ -23,14 +24,11 @@ import ExitToAppIcon from '@mui/icons-material/ExitToApp'
 import FlagIcon from '@mui/icons-material/Flag'
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 
-import { useCarplayStore } from '@store/store'
-import { NaviBag } from '@main/services/carplay/services/types'
-import {
-  NavLocale,
-  translateNavigation
-} from '@main/services/carplay/services/utils/translateNavigation'
+import { useLiviStore } from '@store/store'
+import type { NaviBag } from '@shared/types'
+import { NavLocale, translateNavigation } from '@shared/utils/translateNavigation'
 
-type CarplayEventMsg = { type: string; payload?: unknown }
+type ProjectionEventMsg = { type: string; payload?: unknown }
 
 function navLocaleFromSettings(v: unknown): NavLocale {
   if (v === 'de' || v === 'ua' || v === 'en') return v
@@ -159,6 +157,36 @@ function ManeuverIcon({
   }
 }
 
+function ManeuverGraphic({
+  imageBase64,
+  type,
+  turnSide,
+  size
+}: {
+  imageBase64?: string
+  type: number | undefined
+  turnSide: number | undefined
+  size: number
+}) {
+  if (imageBase64) {
+    return (
+      <Box
+        component="img"
+        src={`data:image/png;base64,${imageBase64}`}
+        alt="Navigation maneuver"
+        sx={{
+          width: size,
+          height: size,
+          objectFit: 'contain',
+          display: 'block'
+        }}
+      />
+    )
+  }
+
+  return <ManeuverIcon type={type} turnSide={turnSide} size={size} />
+}
+
 export type NavMiniProps = {
   className?: string
   iconSize?: number
@@ -174,14 +202,14 @@ export type NavMiniProps = {
  */
 export function NavMini({ className, iconSize = 56 }: NavMiniProps) {
   const theme = useTheme()
-  const settings = useCarplayStore((s) => s.settings)
+  const settings = useLiviStore((s) => s.settings)
   const locale = navLocaleFromSettings(settings?.language)
 
   const [navi, setNavi] = React.useState<NaviBag | null>(null)
 
   const hydrate = React.useCallback(async () => {
     try {
-      const snap = await window.carplay.ipc.readNavigation()
+      const snap = await window.projection.ipc.readNavigation()
       const patch = unwrapNaviPatch(snap)
       setNavi((prev) => mergeNavi(prev, patch))
     } catch {
@@ -193,7 +221,7 @@ export function NavMini({ className, iconSize = 56 }: NavMiniProps) {
     void hydrate()
 
     const handler = (_event: unknown, ...args: unknown[]) => {
-      const msg = (args[0] ?? {}) as CarplayEventMsg
+      const msg = (args[0] ?? {}) as ProjectionEventMsg
       if (msg.type !== 'navigation') return
 
       const patch = unwrapNaviPatch(msg)
@@ -201,8 +229,8 @@ export function NavMini({ className, iconSize = 56 }: NavMiniProps) {
       else void hydrate()
     }
 
-    window.carplay.ipc.onEvent(handler)
-    return () => window.carplay.ipc.offEvent(handler)
+    window.projection.ipc.onEvent(handler)
+    return () => window.projection.ipc.offEvent(handler)
   }, [hydrate])
 
   const t = React.useMemo(() => translateNavigation(navi, locale), [navi, locale])
@@ -212,6 +240,21 @@ export function NavMini({ className, iconSize = 56 }: NavMiniProps) {
   const remainDistanceText = t.RemainDistanceText
   const etaText = t.TimeRemainingToDestinationText
   const destinationDistanceText = t.DistanceRemainingDisplayStringText
+
+  const maneuverImageBase64 =
+    typeof navi?.NaviImageBase64 === 'string' && navi.NaviImageBase64.length > 0
+      ? navi.NaviImageBase64
+      : undefined
+
+  const hasManeuverImage = Boolean(maneuverImageBase64)
+
+  const bottomLeftText =
+    etaText && etaText !== '—'
+      ? etaText
+      : typeof t.CurrentRoadName === 'string' && t.CurrentRoadName.length > 0
+        ? t.CurrentRoadName
+        : '—'
+
   const clockText = useBlinkingTime()
   const showColon = clockText.includes(':')
   const timeWithColon = clockText.replace(' ', ':')
@@ -267,7 +310,7 @@ export function NavMini({ className, iconSize = 56 }: NavMiniProps) {
         gridTemplateRows: 'auto auto auto auto',
         alignItems: 'center',
         justifyItems: 'center',
-        rowGap: 0.6
+        rowGap: 1.6
       }}
     >
       {/* ICON */}
@@ -280,13 +323,18 @@ export function NavMini({ className, iconSize = 56 }: NavMiniProps) {
           opacity: 1
         }}
       >
-        <ManeuverIcon type={maneuverType} turnSide={turnSide} size={iconSize} />
+        <ManeuverGraphic
+          imageBase64={maneuverImageBase64}
+          type={maneuverType}
+          turnSide={turnSide}
+          size={iconSize}
+        />
       </Box>
 
       {/* distance to next maneuver */}
       <Typography
         sx={{
-          fontSize: 18,
+          fontSize: 22,
           fontWeight: 600,
           lineHeight: 1,
           textAlign: 'center',
@@ -301,8 +349,8 @@ export function NavMini({ className, iconSize = 56 }: NavMiniProps) {
       {/* divider line */}
       <Box
         sx={{
-          width: '100%',
-          height: 0.4,
+          width: hasManeuverImage ? '72%' : '100%',
+          height: 1.4,
           borderRadius: 999,
           bgcolor: theme.palette.text.secondary,
           opacity: 0.35
@@ -315,40 +363,50 @@ export function NavMini({ className, iconSize = 56 }: NavMiniProps) {
           width: '100%',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
+          justifyContent: hasManeuverImage ? 'center' : 'space-between',
           gap: 2.2,
           whiteSpace: 'nowrap'
         }}
       >
-        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.7 }}>
-          <AccessTimeIcon sx={{ fontSize: 18, opacity: 0.9 }} />
+        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.7, minWidth: 0 }}>
+          {etaText && etaText !== '—' ? (
+            <AccessTimeIcon sx={{ fontSize: 22, opacity: 0.9 }} />
+          ) : (
+            <SignpostIcon sx={{ fontSize: 22, opacity: 0.9 }} />
+          )}
+
           <Typography
             sx={{
-              fontSize: 16,
+              fontSize: 20,
               fontWeight: 500,
-              lineHeight: 1,
+              lineHeight: 1.4,
               whiteSpace: 'nowrap',
-              fontVariantNumeric: 'tabular-nums'
+              fontVariantNumeric: 'tabular-nums',
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
             }}
           >
-            {etaText ?? '—'}
+            {bottomLeftText}
           </Typography>
         </Box>
 
-        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.7 }}>
-          <RouteIcon sx={{ fontSize: 18, opacity: 0.9 }} />
-          <Typography
-            sx={{
-              fontSize: 16,
-              fontWeight: 500,
-              lineHeight: 1,
-              whiteSpace: 'nowrap',
-              fontVariantNumeric: 'tabular-nums'
-            }}
-          >
-            {destinationDistanceText ?? '—'}
-          </Typography>
-        </Box>
+        {!hasManeuverImage && (
+          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.7 }}>
+            <RouteIcon sx={{ fontSize: 22, opacity: 0.9 }} />
+            <Typography
+              sx={{
+                fontSize: 22,
+                fontWeight: 500,
+                lineHeight: 1,
+                whiteSpace: 'nowrap',
+                fontVariantNumeric: 'tabular-nums'
+              }}
+            >
+              {destinationDistanceText ?? '—'}
+            </Typography>
+          </Box>
+        )}
       </Box>
     </Box>
   )

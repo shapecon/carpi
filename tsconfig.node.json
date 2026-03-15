@@ -1,6 +1,7 @@
 {
   "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
   "include": ["electron.vite.config.*", "src/main/**/*", "src/preload/**/*", "src/types/**/*"],
+  "exclude": ["**/__tests__/**", "**/*.test.ts", "**/*.test.tsx"],
   "compilerOptions": {
     "composite": true,
     "types": ["electron-vite/node", "w3c-web-usb"],
@@ -20,8 +21,11 @@
     "baseUrl": "./src",
     "paths": {
       "@main/*": ["main/*"],
-      "@carplay/*": ["main/carplay/*"],
-      "@carplay/node": ["main/carplay/node"],
+      "@shared/*": ["main/shared/*"],
+      "@projection/messages": ["main/services/projection/messages/index.ts"],
+      "@projection/messages/*": ["main/services/projection/messages/*"],
+      "@projection/node": ["main/services/projection/node"],
+      "@projection/*": ["main/services/projection/*"],
       "@audio": ["main/audio/index.ts"]
     }
   }

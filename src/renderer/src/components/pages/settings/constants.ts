@@ -1,4 +1,4 @@
-import { ExtraConfig } from '@main/Globals'
+import type { ExtraConfig } from '@shared/types'
 
 export const MEDIA_DELAY_MIN = 300
 export const MEDIA_DELAY_MAX = 2000
@@ -30,20 +30,23 @@ export enum WiFiValues {
   '5ghz' = '5ghz'
 }
 
-export enum MicTypeValues {
-  'box' = 'box',
-  'os' = 'os'
-}
-
 export const requiresRestartParams: (keyof ExtraConfig)[] = [
   'width',
   'height',
   'fps',
-  'dpi',
-  'format',
   'mediaDelay',
   'wifiType',
   'audioTransferMode',
+  'callQuality',
+  'dashboardMediaInfo',
+  'dashboardVehicleInfo',
+  'dashboardRouteInfo',
+  'gps',
+  'gnssGps',
+  'gnssGlonass',
+  'gnssGalileo',
+  'gnssBeiDou',
+  'autoConn',
   'carName',
   'oemName',
   'mediaSound',

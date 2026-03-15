@@ -1,5 +1,5 @@
 import { SettingsNode } from '../types'
-import { ExtraConfig } from '../../../../main/Globals'
+import type { ExtraConfig } from '@shared/types'
 
 export const generalSchema: SettingsNode<ExtraConfig> = {
   route: 'general',
@@ -93,6 +93,81 @@ export const generalSchema: SettingsNode<ExtraConfig> = {
           label: 'Auto Connect',
           labelKey: 'settings.autoConnect',
           path: 'autoConn'
+        }
+      ]
+    },
+    {
+      type: 'route',
+      route: 'firmwareSettings',
+      label: 'Firmware Settings',
+      labelKey: 'settings.firmwareSettings',
+      path: '',
+      children: [
+        {
+          type: 'route',
+          route: 'dashboardInfo',
+          label: 'Dashboard Info',
+          labelKey: 'settings.DashboardInfo',
+          path: '',
+          children: [
+            {
+              type: 'checkbox',
+              label: 'Media Info',
+              labelKey: 'settings.dashboardMediaInfo',
+              path: 'dashboardMediaInfo'
+            },
+            {
+              type: 'checkbox',
+              label: 'Vehicle Info',
+              labelKey: 'settings.dashboardVehicleInfo',
+              path: 'dashboardVehicleInfo'
+            },
+            {
+              type: 'checkbox',
+              label: 'Route Info',
+              labelKey: 'settings.dashboardRouteInfo',
+              path: 'dashboardRouteInfo'
+            }
+          ]
+        },
+        {
+          type: 'route',
+          route: 'gnss',
+          label: 'GNSS',
+          labelKey: 'settings.GNSS',
+          path: '',
+          children: [
+            {
+              type: 'checkbox',
+              label: 'HU GPS Forwarding',
+              labelKey: 'settings.gps',
+              path: 'gps'
+            },
+            {
+              type: 'checkbox',
+              label: 'GPS',
+              labelKey: 'settings.gnssGps',
+              path: 'gnssGps'
+            },
+            {
+              type: 'checkbox',
+              label: 'GLONASS',
+              labelKey: 'settings.gnssGlonass',
+              path: 'gnssGlonass'
+            },
+            {
+              type: 'checkbox',
+              label: 'Galileo',
+              labelKey: 'settings.gnssGalileo',
+              path: 'gnssGalileo'
+            },
+            {
+              type: 'checkbox',
+              label: 'BeiDou',
+              labelKey: 'settings.gnssBeiDou',
+              path: 'gnssBeiDou'
+            }
+          ]
         }
       ]
     },
@@ -305,24 +380,6 @@ export const generalSchema: SettingsNode<ExtraConfig> = {
       }
     },
     {
-      type: 'select',
-      label: 'Language',
-      labelKey: 'settings.language',
-      path: 'language',
-      displayValue: true,
-      options: [
-        { label: 'English', labelKey: 'settings.english', value: 'en' },
-        { label: 'German', labelKey: 'settings.german', value: 'de' },
-        { label: 'Ukrainian', labelKey: 'settings.ukrainian', value: 'ua' }
-      ],
-      page: {
-        title: 'Language',
-        labelTitle: 'settings.language',
-        description: 'Select the application language',
-        labelDescription: 'settings.languageDescription'
-      }
-    },
-    {
       type: 'route',
       label: 'Telemetry',
       labelKey: 'settings.telemetry',
@@ -372,6 +429,45 @@ export const generalSchema: SettingsNode<ExtraConfig> = {
       label: 'Fullscreen',
       labelKey: 'settings.fullscreen',
       path: 'kiosk'
+    },
+    {
+      type: 'number',
+      label: 'UI Zoom',
+      labelKey: 'settings.uiZoom',
+      path: 'uiZoomPercent',
+      displayValue: true,
+      min: 50,
+      max: 200,
+      step: 10,
+      valueTransform: {
+        toView: (v: number) => v,
+        fromView: (v: number) => v,
+        format: (v: number) => `${v}%`
+      },
+      page: {
+        title: 'UI Zoom',
+        labelTitle: 'settings.uiZoom',
+        description: 'Adjust the global UI zoom level of the application window.',
+        labelDescription: 'settings.uiZoomDescription'
+      }
+    },
+    {
+      type: 'select',
+      label: 'Language',
+      labelKey: 'settings.language',
+      path: 'language',
+      displayValue: true,
+      options: [
+        { label: 'English', labelKey: 'settings.english', value: 'en' },
+        { label: 'German', labelKey: 'settings.german', value: 'de' },
+        { label: 'Ukrainian', labelKey: 'settings.ukrainian', value: 'ua' }
+      ],
+      page: {
+        title: 'Language',
+        labelTitle: 'settings.language',
+        description: 'Select the application language',
+        labelDescription: 'settings.languageDescription'
+      }
     }
   ]
 }

@@ -4,7 +4,7 @@
     "target": "es2024",
     "module": "es2022",
     "lib": ["es2024", "dom"],
-    "types": ["@webgpu/types"],
+    "types": ["@webgpu/types", "jest", "node"],
     "allowJs": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
@@ -20,13 +20,15 @@
       "@audio": ["main/audio/index.ts"],
       "@audio/*": ["main/audio/*"],
       "@renderer/*": ["renderer/src/*"],
-      "@carplay/messages": ["main/carplay/messages/index.ts"],
+      "@projection/messages": ["main/services/projection/messages/index.ts"],
+      "@projection/messages/*": ["main/services/projection/messages/*"],
       "@main/*": ["main/*"],
+      "@shared/*": ["main/shared/*"],
       "@worker/*": ["renderer/src/components/worker/*"],
       "@store/*": ["renderer/src/store/*"],
-      "@utils/*": ["renderer/src/utils/*"]
+      "@utils/*": ["renderer/src/utils/*"],
+      "@types/*": ["renderer/src/types/*"]
     }
   },
-  "include": ["src/**/*", "src/types"],
-  "exclude": ["**/__tests__/**", "**/*.test.ts", "**/*.test.tsx"]
+  "include": ["src/**/*", "src/types"]
 }

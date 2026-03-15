@@ -16,6 +16,8 @@ It is a standalone cross-platform Electron head unit with hardware-accelerated v
 ![Main Version](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/f-io/LIVI/version/.github/badges/main-version.json)
 ![TS Main](https://img.shields.io/github/actions/workflow/status/f-io/LIVI/typecheck.yml?branch=main&label=TS%20main)
 ![Build Main](https://img.shields.io/github/actions/workflow/status/f-io/LIVI/build.yml?branch=main&label=build%20main)
+![Coverage Main](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/f-io/LIVI/version/.github/badges/main-coverage-main.json)
+![Coverage Renderer](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/f-io/LIVI/version/.github/badges/main-coverage-renderer.json)
 
 ## Installation
 
@@ -86,7 +88,7 @@ brew install sox
 ## Windows (x64)
 
 > [!IMPORTANT]
-> The Windows build is provided on a **best-effort basis**.  
+> The Windows build is provided on a **best-effort basis**.
 > Windows is **not a primary target platform** of this project and receives limited testing.
 >
 > It is mainly intended for development, experimentation, and desktop testing.
@@ -102,15 +104,15 @@ Both binaries are bundled with the application. No additional audio software is 
 
 ### USB Driver Requirement
 
-The Carlinkit dongle requires a compatible **WinUSB (winusb.sys)** driver on Windows.  
+The Carlinkit dongle requires a compatible **WinUSB (winusb.sys)** driver on Windows.
 You can install it using a tool such as **Zadig** (libwdi): https://github.com/pbatard/libwdi/releases
 
 Steps:
 
-1. Plug in the Carlinkit dongle  
-2. Start Zadig  
-3. Select the dongle from the device list  
-4. Install the **WinUSB (winusb.sys)** driver  
+1. Plug in the Carlinkit dongle
+2. Start Zadig
+3. Select the dongle from the device list
+4. Install the **WinUSB (winusb.sys)** driver
 
 ## Build Environment
 
@@ -162,8 +164,8 @@ The Dashboard is currently in an early stage. While the IPC/socket telemetry pay
 To feed demo telemetry into the app, you can run the simulator from `scripts/tools`:
 
 ```bash
-pnpm --dir scripts/tools install
-pnpm --dir scripts/tools tsx telemetry-sim.ts cycle
+pnpm -C scripts/tools install
+pnpm -C scripts/tools run telemetry:cycle
 ```
 
 <p align="center">

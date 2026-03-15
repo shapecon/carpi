@@ -5,7 +5,7 @@ import { KeyCommand } from '../../components/worker/types'
 import { useLocation } from 'react-router'
 import { ROUTES } from '../../constants'
 import { AppContext } from '../../context'
-import { useCarplayStore } from '@store/store'
+import { useLiviStore } from '@store/store'
 
 type RefLike<T> = { current: T | null }
 
@@ -40,7 +40,7 @@ export const useKeyDown = ({
   }, [location.hash, location.pathname])
 
   const appContext = useContext(AppContext)
-  const settings = useCarplayStore((s) => s.settings)
+  const settings = useLiviStore((s) => s.settings)
 
   const navRef = appContext?.navEl
   const mainRef = appContext?.contentEl
@@ -93,12 +93,33 @@ export const useKeyDown = ({
 
       const isBackKey = code === (b?.back || '') || code === 'Escape'
       const isEnter = code === 'Enter' || code === 'NumpadEnter'
-      const isSelectDown = code === (b?.selectDown || '') || isEnter
+      const isSelectDown = code === (b?.selectDown || '')
+
+      const navRoot = readRefCurrent<HTMLElement>(navRef) ?? document.getElementById('nav-root')
+      const mainRoot =
+        readRefCurrent<HTMLElement>(mainRef) ?? document.getElementById('content-root')
+      const dialogRoot = document.querySelector<HTMLElement>('[role="dialog"]')
+      const dialogContainer = document.querySelector<HTMLElement>('.MuiDialog-container')
+
+      const inNav = inContainer(navRoot, active) || !!active?.closest?.('#nav-root')
+      let inMain = inContainer(mainRoot, active) || !!active?.closest?.('#content-root')
+
+      if (
+        !inMain &&
+        dialogRoot &&
+        active &&
+        (dialogRoot === active ||
+          dialogRoot.contains(active) ||
+          dialogContainer === active ||
+          !!dialogContainer?.contains(active))
+      ) {
+        inMain = true
+      }
 
       const pager = appContext?.telemetryPager
       const isTelemetryRoute = currentRoute.startsWith('/telemetry')
 
-      if (pager && isTelemetryRoute) {
+      if (pager && isTelemetryRoute && !inNav) {
         if (isLeft) {
           if (pager.canPrev()) pager.prev()
           event.preventDefault()
@@ -121,13 +142,6 @@ export const useKeyDown = ({
           break
         }
       }
-
-      const navRoot = readRefCurrent<HTMLElement>(navRef) ?? document.getElementById('nav-root')
-      const mainRoot =
-        readRefCurrent<HTMLElement>(mainRef) ?? document.getElementById('content-root')
-
-      const inNav = inContainer(navRoot, active) || !!active?.closest?.('#nav-root')
-      const inMain = inContainer(mainRoot, active) || !!active?.closest?.('#content-root')
 
       const nothing = !active || active === document.body
       const formFocused = isFormField(active)
@@ -153,7 +167,66 @@ export const useKeyDown = ({
       }
 
       if (inNav) {
-        if (isEnter || isSelectDown) {
+        if (isLeft) {
+          const target = (document.activeElement as HTMLElement | null) ?? navRoot
+
+          if (target) {
+            target.dispatchEvent(
+              new KeyboardEvent('keydown', {
+                bubbles: true,
+                cancelable: true,
+                key: 'ArrowUp',
+                code: 'ArrowUp'
+              })
+            )
+          }
+
+          event.preventDefault()
+          event.stopPropagation()
+          return
+        }
+
+        if (isRight) {
+          const target = (document.activeElement as HTMLElement | null) ?? navRoot
+
+          if (target) {
+            target.dispatchEvent(
+              new KeyboardEvent('keydown', {
+                bubbles: true,
+                cancelable: true,
+                key: 'ArrowDown',
+                code: 'ArrowDown'
+              })
+            )
+          }
+
+          event.preventDefault()
+          event.stopPropagation()
+          return
+        }
+
+        if (isSelectDown) {
+          const target = document.activeElement as HTMLElement | null
+
+          const ok = activateControl(target)
+          if (!ok && target) {
+            target.click()
+          }
+
+          if (currentRoute !== ROUTES.HOME) {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                focusFirstInMain()
+              })
+            })
+          }
+
+          event.preventDefault()
+          event.stopPropagation()
+          return
+        }
+
+        if (isEnter) {
           const target = document.activeElement as HTMLElement | null
 
           const ok = activateControl(target)
@@ -165,11 +238,30 @@ export const useKeyDown = ({
           event.stopPropagation()
           return
         }
+      }
 
-        if (isRight) {
-          requestAnimationFrame(() => {
-            focusFirstInMain()
-          })
+      // If a listbox/menu is open, map rotary Left/Right to ArrowUp/ArrowDown.
+      if (!inNav && (isLeft || isRight)) {
+        const menuRoot = document.querySelector<HTMLElement>('[role="listbox"], [role="menu"]')
+        const activeEl = document.activeElement as HTMLElement | null
+        const focusInMenu = !!activeEl?.closest?.('[role="listbox"], [role="menu"]')
+
+        const focusOnExpandedCombobox =
+          activeEl?.getAttribute?.('role') === 'combobox' &&
+          activeEl?.getAttribute?.('aria-expanded') === 'true'
+
+        if (menuRoot && (focusInMenu || focusOnExpandedCombobox)) {
+          const target = focusInMenu ? activeEl : menuRoot
+
+          target?.dispatchEvent(
+            new KeyboardEvent('keydown', {
+              bubbles: true,
+              cancelable: true,
+              key: isLeft ? 'ArrowUp' : 'ArrowDown',
+              code: isLeft ? 'ArrowUp' : 'ArrowDown'
+            })
+          )
+
           event.preventDefault()
           event.stopPropagation()
           return
@@ -177,11 +269,15 @@ export const useKeyDown = ({
       }
 
       {
-        const wantEnterMainFromNav = inNav && (isRight || isEnter || isSelectDown)
+        const wantEnterMainFromNav = inNav && (isEnter || isSelectDown)
         const wantEnterMainFromNothing =
           nothing && (isLeft || isRight || isUp || isDown || isEnter || isSelectDown)
 
-        if (currentRoute !== ROUTES.HOME && (wantEnterMainFromNav || wantEnterMainFromNothing)) {
+        if (
+          !dialogRoot &&
+          currentRoute !== ROUTES.HOME &&
+          (wantEnterMainFromNav || wantEnterMainFromNothing)
+        ) {
           const okMain = focusFirstInMain()
           if (okMain) {
             event.preventDefault()
@@ -204,7 +300,7 @@ export const useKeyDown = ({
         (active?.tagName === 'INPUT' && (active as HTMLInputElement).type === 'range') ||
         active?.getAttribute('role') === 'slider'
 
-      if (inMain && isBackKey) {
+      if (!inNav && isBackKey) {
         const activeNow = document.activeElement as HTMLElement | null
 
         if (editingField) {
@@ -212,6 +308,16 @@ export const useKeyDown = ({
             activeNow?.tagName === 'INPUT' && (activeNow as HTMLInputElement).type === 'range'
 
           if (!isRangeInput) {
+            if (isTelemetryRoute) {
+              handleSetFocusedElId(null)
+              const ok = focusSelectedNav()
+              if (ok) {
+                event.preventDefault()
+                event.stopPropagation()
+              }
+              return
+            }
+
             handleSetFocusedElId(null)
             event.preventDefault()
             event.stopPropagation()

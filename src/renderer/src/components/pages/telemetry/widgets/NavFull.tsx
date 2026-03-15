@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Box, Chip, Divider, Stack, Typography } from '@mui/material'
+import { Box, Chip, Stack, Typography } from '@mui/material'
 
 import AccessTimeIcon from '@mui/icons-material/AccessTime'
 import RouteIcon from '@mui/icons-material/Route'
@@ -30,18 +30,15 @@ import WrongLocationIcon from '@mui/icons-material/WrongLocation'
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 import NavigationOutlinedIcon from '@mui/icons-material/NavigationOutlined'
 
-import {
-  NavLocale,
-  translateNavigation
-} from '@main/services/carplay/services/utils/translateNavigation'
-import { useCarplayStore } from '@store/store'
-import { NaviBag } from '@main/services/carplay/services/types'
+import { NavLocale, translateNavigation } from '@shared/utils/translateNavigation'
+import { useLiviStore } from '@store/store'
+import type { NaviBag } from '@shared/types'
 
 export type NavFullProps = {
   className?: string
 }
 
-type CarplayEventMsg = { type: string; payload?: unknown }
+type ProjectionEventMsg = { type: string; payload?: unknown }
 
 function navLocaleFromSettings(v: unknown): NavLocale {
   if (v === 'de' || v === 'ua' || v === 'en') return v
@@ -73,7 +70,7 @@ function unwrapNaviPatch(raw: unknown): Partial<NaviBag> | null {
     }
   }
 
-  // carplay-event message wrapper
+  // projection-event message wrapper
   if (isRecord(raw) && isRecord(raw.payload)) {
     const p = raw.payload as Record<string, unknown>
 
@@ -237,15 +234,45 @@ function ManeuverVisual({
   }
 }
 
+function ManeuverGraphic({
+  imageBase64,
+  type,
+  turnSide
+}: {
+  imageBase64?: string
+  type: number | undefined
+  turnSide: number | undefined
+}) {
+  const size = 72
+
+  if (imageBase64) {
+    return (
+      <Box
+        component="img"
+        src={`data:image/png;base64,${imageBase64}`}
+        alt="Navigation maneuver"
+        sx={{
+          width: size,
+          height: size,
+          objectFit: 'contain',
+          display: 'block'
+        }}
+      />
+    )
+  }
+
+  return <ManeuverVisual type={type} turnSide={turnSide} />
+}
+
 export function NavFull({ className }: NavFullProps) {
-  const settings = useCarplayStore((s) => s.settings)
+  const settings = useLiviStore((s) => s.settings)
   const locale = navLocaleFromSettings(settings?.language)
 
   const [navi, setNavi] = React.useState<NaviBag | null>(null)
 
   const hydrate = React.useCallback(async () => {
     try {
-      const snap = await window.carplay.ipc.readNavigation()
+      const snap = await window.projection.ipc.readNavigation()
       const patch = unwrapNaviPatch(snap)
       setNavi((prev) => mergeNavi(prev, patch))
     } catch {
@@ -257,7 +284,7 @@ export function NavFull({ className }: NavFullProps) {
     void hydrate()
 
     const handler = (_event: unknown, ...args: unknown[]) => {
-      const msg = (args[0] ?? {}) as CarplayEventMsg
+      const msg = (args[0] ?? {}) as ProjectionEventMsg
       if (msg.type !== 'navigation') return
 
       const patch = unwrapNaviPatch(msg)
@@ -268,8 +295,8 @@ export function NavFull({ className }: NavFullProps) {
       }
     }
 
-    window.carplay.ipc.onEvent(handler)
-    return () => window.carplay.ipc.offEvent(handler)
+    window.projection.ipc.onEvent(handler)
+    return () => window.projection.ipc.offEvent(handler)
   }, [hydrate])
 
   const t = React.useMemo(() => translateNavigation(navi, locale), [navi, locale])
@@ -278,6 +305,16 @@ export function NavFull({ className }: NavFullProps) {
     isRecord(t) && typeof t.RemainDistanceText === 'string' ? t.RemainDistanceText : undefined
 
   const isActive = navi?.NaviStatus === 1
+
+  const maneuverImageBase64 =
+    typeof navi?.NaviImageBase64 === 'string' && navi.NaviImageBase64.length > 0
+      ? navi.NaviImageBase64
+      : undefined
+
+  const hasManeuverImage = Boolean(maneuverImageBase64)
+
+  const maneuverText =
+    maneuverImageBase64 && t.ManeuverTypeText === 'Unknown' ? undefined : t.ManeuverTypeText
 
   return (
     <Box
@@ -299,50 +336,103 @@ export function NavFull({ className }: NavFullProps) {
         {!isActive ? (
           <NavigationOutlinedIcon sx={{ fontSize: 84, opacity: 0.55 }} />
         ) : (
-          <Stack spacing={2.2} sx={{ alignItems: 'center', textAlign: 'center' }}>
-            <Stack direction="row" spacing={2} alignItems="center" justifyContent="center">
-              <Box
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  minWidth: 92
-                }}
-              >
-                <ManeuverVisual type={t.codes.ManeuverType} turnSide={t.codes.TurnSide} />
+          <Stack spacing={2.6} sx={{ alignItems: 'center', textAlign: 'center' }}>
+            {hasManeuverImage ? (
+              <Stack spacing={1.2} alignItems="center" justifyContent="center">
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    minWidth: 92
+                  }}
+                >
+                  <ManeuverGraphic
+                    imageBase64={maneuverImageBase64}
+                    type={t.codes.ManeuverType}
+                    turnSide={t.codes.TurnSide}
+                  />
 
-                {remainDistanceText && (
-                  <Typography
-                    sx={{
-                      mt: 0.5,
-                      fontSize: 20,
-                      fontWeight: 600,
-                      letterSpacing: 0.2,
-                      lineHeight: 1
-                    }}
-                  >
-                    {remainDistanceText}
+                  {remainDistanceText && (
+                    <Typography
+                      sx={{
+                        mt: 0.5,
+                        fontSize: 20,
+                        fontWeight: 600,
+                        letterSpacing: 0.2,
+                        lineHeight: 1
+                      }}
+                    >
+                      {remainDistanceText}
+                    </Typography>
+                  )}
+                </Box>
+
+                {maneuverText && (
+                  <Typography variant="h5" sx={{ lineHeight: 1.1, textAlign: 'center' }}>
+                    {maneuverText}
                   </Typography>
                 )}
-              </Box>
+              </Stack>
+            ) : (
+              <Stack direction="row" spacing={2} alignItems="center" justifyContent="center">
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    minWidth: 92
+                  }}
+                >
+                  <ManeuverGraphic
+                    imageBase64={maneuverImageBase64}
+                    type={t.codes.ManeuverType}
+                    turnSide={t.codes.TurnSide}
+                  />
 
-              <Box sx={{ minWidth: 0, textAlign: 'left' }}>
-                <Typography variant="h5" sx={{ lineHeight: 1.1 }}>
-                  {t.ManeuverTypeText}
-                </Typography>
-
-                {t.CurrentRoadName && (
-                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.6 }}>
-                    <SignpostIcon fontSize="small" sx={{ opacity: 0.85 }} />
-                    <Typography variant="body2" sx={{ opacity: 0.85 }} noWrap>
-                      {t.CurrentRoadName}
+                  {remainDistanceText && (
+                    <Typography
+                      sx={{
+                        mt: 0.5,
+                        fontSize: 20,
+                        fontWeight: 600,
+                        letterSpacing: 0.2,
+                        lineHeight: 1
+                      }}
+                    >
+                      {remainDistanceText}
                     </Typography>
-                  </Stack>
-                )}
-              </Box>
-            </Stack>
+                  )}
+                </Box>
 
-            <Divider flexItem sx={{ opacity: 0.35 }} />
+                <Box sx={{ minWidth: 0, textAlign: 'left' }}>
+                  {maneuverText && (
+                    <Typography variant="h5" sx={{ lineHeight: 1.1 }}>
+                      {maneuverText}
+                    </Typography>
+                  )}
+
+                  {t.CurrentRoadName && (
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.6 }}>
+                      <SignpostIcon fontSize="small" sx={{ opacity: 0.85 }} />
+                      <Typography variant="body2" sx={{ opacity: 0.85 }} noWrap>
+                        {t.CurrentRoadName}
+                      </Typography>
+                    </Stack>
+                  )}
+                </Box>
+              </Stack>
+            )}
+
+            <Box
+              sx={{
+                width: hasManeuverImage ? '72%' : '100%',
+                height: 1.4,
+                borderRadius: 999,
+                bgcolor: 'text.secondary',
+                opacity: 0.35
+              }}
+            />
 
             <Stack
               direction="row"
@@ -351,6 +441,15 @@ export function NavFull({ className }: NavFullProps) {
               justifyContent="center"
               sx={{ rowGap: 1 }}
             >
+              {hasManeuverImage && t.CurrentRoadName && (
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
+                  <SignpostIcon fontSize="small" sx={{ opacity: 0.85 }} />
+                  <Typography variant="body2" sx={{ opacity: 0.85 }} noWrap>
+                    {t.CurrentRoadName}
+                  </Typography>
+                </Stack>
+              )}
+
               {t.TimeRemainingToDestinationText && (
                 <Stack direction="row" spacing={1} alignItems="center">
                   <AccessTimeIcon fontSize="small" />

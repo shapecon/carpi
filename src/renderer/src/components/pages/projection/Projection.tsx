@@ -1,0 +1,1079 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from 'react'
+import { Box, useTheme } from '@mui/material'
+import { useLocation, useNavigate } from 'react-router'
+import { CommandMapping, AudioCommand } from '@shared/types/ProjectionEnums'
+import { matchFittingAAResolution } from '@shared/utils'
+import type { ExtraConfig } from '@shared/types'
+import { useLiviStore, useStatusStore } from '../../../store/store'
+import { InitEvent, UpdateFpsEvent } from '@worker/render/RenderEvents'
+import { createProjectionWorker } from '@worker/createProjectionWorker'
+import { createRenderWorker } from '@worker/createRenderWorker'
+import type { ProjectionWorker, UsbEvent, KeyCommand, WorkerToUI } from '@worker/types'
+import { useCarplayMultiTouch } from './hooks/useCarplayTouch'
+
+// Icons
+import CropPortraitOutlinedIcon from '@mui/icons-material/CropPortraitOutlined'
+
+const RETRY_DELAY_MS = 3000
+
+interface CarplayProps {
+  receivingVideo: boolean
+  setReceivingVideo: (v: boolean) => void
+  settings: ExtraConfig
+  command: KeyCommand
+  commandCounter: number
+
+  navVideoOverlayActive: boolean
+  setNavVideoOverlayActive: (v: boolean) => void
+}
+
+function StatusOverlay({
+  mode,
+  show,
+  offsetX = 0,
+  offsetY = 0
+}: {
+  mode: 'dongle' | 'phone'
+  show: boolean
+  offsetX?: number
+  offsetY?: number
+}) {
+  const theme = useTheme()
+  const isPhonePhase = mode === 'phone'
+
+  return (
+    <Box
+      role="status"
+      aria-live="polite"
+      aria-hidden={!show}
+      sx={{
+        position: 'absolute',
+        inset: 0,
+        pointerEvents: 'none',
+        display: show ? 'block' : 'none',
+        zIndex: 9
+      }}
+    >
+      <Box
+        sx={{
+          position: 'absolute',
+          left: `calc(50% + ${offsetX}px)`,
+          top: `calc(50% + ${offsetY}px)`,
+          transform: 'translate(-50%, -50%)',
+          display: 'grid',
+          placeItems: 'center'
+        }}
+      >
+        <CropPortraitOutlinedIcon
+          sx={{
+            fontSize: 84,
+            color: theme.palette.text.primary,
+            opacity: isPhonePhase ? 'var(--ui-breathe-opacity, 1)' : 0.55
+          }}
+        />
+      </Box>
+    </Box>
+  )
+}
+
+// Projection
+
+const CarplayComponent: React.FC<CarplayProps> = ({
+  receivingVideo,
+  setReceivingVideo,
+  settings,
+  command,
+  commandCounter,
+  navVideoOverlayActive,
+  setNavVideoOverlayActive
+}) => {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const pathname = location.pathname
+
+  const pathnameRef = useRef(pathname)
+  useEffect(() => {
+    pathnameRef.current = pathname
+  }, [pathname])
+
+  const theme = useTheme()
+
+  // Zustand store
+  const isStreaming = useStatusStore((s) => s.isStreaming)
+  const setStreaming = useStatusStore((s) => s.setStreaming)
+  const setDongleConnected = useStatusStore((s) => s.setDongleConnected)
+  const isDongleConnected = useStatusStore((s) => s.isDongleConnected)
+  const resetInfo = useLiviStore((s) => s.resetInfo)
+  const setDeviceInfo = useLiviStore((s) => s.setDeviceInfo)
+  const setAudioInfo = useLiviStore((s) => s.setAudioInfo)
+  const setPcmData = useLiviStore((s) => s.setPcmData)
+  const setBluetoothPairedList = useLiviStore((s) => s.setBluetoothPairedList)
+  const negotiatedWidth = useLiviStore((s) => s.negotiatedWidth)
+  const negotiatedHeight = useLiviStore((s) => s.negotiatedHeight)
+  const boxInfo = useLiviStore((s) => s.boxInfo)
+
+  useEffect(() => {
+    if (pathname !== '/') return
+    void window.projection.ipc.sendFrame().catch(() => {})
+  }, [pathname])
+
+  useEffect(() => {
+    console.log('[CARPLAY] Dongle connected:', isDongleConnected)
+  }, [isDongleConnected])
+
+  // Refs
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const mainElem = useRef<HTMLDivElement>(null)
+  const videoContainerRef = useRef<HTMLDivElement>(null)
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const usbOpTokenRef = useRef(0)
+  const hasStartedRef = useRef(false)
+  const [renderReady, setRenderReady] = useState(false)
+  const [rendererError, setRendererError] = useState<string | null>(null)
+  const lastNonCarplayPathRef = useRef<string | null>(null)
+  const lastNonMapsPathRef = useRef<string | null>(null)
+  const autoSwitchedRef = useRef(false)
+  const pendingVideoFocusRef = useRef(false)
+
+  const autoSwitchOnStreamRef = useRef(Boolean(settings.autoSwitchOnStream))
+  const autoSwitchOnGuidanceRef = useRef(Boolean(settings.autoSwitchOnGuidance))
+  const autoSwitchOnPhoneCallRef = useRef(Boolean(settings.autoSwitchOnPhoneCall))
+
+  useEffect(() => {
+    autoSwitchOnStreamRef.current = Boolean(settings.autoSwitchOnStream)
+  }, [settings.autoSwitchOnStream])
+
+  useEffect(() => {
+    autoSwitchOnGuidanceRef.current = Boolean(settings.autoSwitchOnGuidance)
+  }, [settings.autoSwitchOnGuidance])
+
+  useEffect(() => {
+    autoSwitchOnPhoneCallRef.current = Boolean(settings.autoSwitchOnPhoneCall)
+  }, [settings.autoSwitchOnPhoneCall])
+
+  // Attention-driven UI switching (call / siri / nav)
+  type AttentionKind = 'call' | 'siri'
+  type AttentionPayload = { kind: AttentionKind; active: boolean; phase?: string }
+
+  const attentionBackPathRef = useRef<string | null>(null)
+  const attentionSwitchedByRef = useRef<AttentionKind | null>(null)
+  const siriReleaseTimerRef = useRef<number | null>(null)
+
+  const clearSiriReleaseTimer = useCallback(() => {
+    if (siriReleaseTimerRef.current != null) {
+      window.clearTimeout(siriReleaseTimerRef.current)
+      siriReleaseTimerRef.current = null
+    }
+  }, [])
+
+  // Keep track of the last host UI route (anything except "/")
+  useEffect(() => {
+    if (pathname === '/') return
+    if (!attentionSwitchedByRef.current) return
+
+    attentionSwitchedByRef.current = null
+    clearSiriReleaseTimer()
+  }, [pathname, clearSiriReleaseTimer])
+
+  useEffect(() => {
+    // When NAV video overlay is shown on top of the host UI (not on "/")
+    if (!navVideoOverlayActive || pathname === '/') return
+
+    const dismiss = () => {
+      setNavVideoOverlayActive(false)
+    }
+
+    // Any touch/click/pen should immediately dismiss
+    window.addEventListener('pointerdown', dismiss, { capture: true, passive: true })
+
+    return () => {
+      window.removeEventListener('pointerdown', dismiss, {
+        capture: true
+      } as AddEventListenerOptions)
+    }
+  }, [navVideoOverlayActive, pathname, setNavVideoOverlayActive])
+
+  // Overlay offset
+  const [overlayX, setOverlayX] = useState(0)
+  const [overlayY, setOverlayY] = useState(0)
+
+  const [viewportSize, setViewportSize] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight
+  })
+
+  useLayoutEffect(() => {
+    const getAnchor = () => document.getElementById('content-root')
+
+    const recalc = () => {
+      const r = getAnchor()?.getBoundingClientRect()
+      if (!r) return
+
+      const contentCenterX = r.left + r.width / 2
+      const contentCenterY = r.top + r.height / 2
+
+      const windowCenterX = window.innerWidth / 2
+      const windowCenterY = window.innerHeight / 2
+
+      setOverlayX(contentCenterX - windowCenterX)
+      setOverlayY(contentCenterY - windowCenterY)
+    }
+
+    recalc()
+    const raf = requestAnimationFrame(recalc)
+
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(recalc) : null
+    const anchor = getAnchor()
+    if (ro && anchor) ro.observe(anchor)
+
+    window.addEventListener('resize', recalc)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize', recalc)
+      ro?.disconnect()
+    }
+  }, [settings?.hand])
+
+  useLayoutEffect(() => {
+    const updateViewportSize = () => {
+      const el = mainElem.current
+      if (!el) {
+        setViewportSize({
+          width: window.innerWidth,
+          height: window.innerHeight
+        })
+        return
+      }
+
+      const rect = el.getBoundingClientRect()
+      const width = Math.round(rect.width)
+      const height = Math.round(rect.height)
+
+      setViewportSize((prev) =>
+        prev.width === width && prev.height === height ? prev : { width, height }
+      )
+    }
+
+    updateViewportSize()
+    const raf = requestAnimationFrame(updateViewportSize)
+
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateViewportSize) : null
+
+    if (ro && mainElem.current) {
+      ro.observe(mainElem.current)
+    }
+
+    window.addEventListener('resize', updateViewportSize)
+
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize', updateViewportSize)
+      ro?.disconnect()
+    }
+  }, [])
+
+  // Render worker + OffscreenCanvas
+  const renderWorkerRef = useRef<Worker | null>(null)
+  const offscreenCanvasRef = useRef<OffscreenCanvas | null>(null)
+
+  // keep initial FPS for worker init
+  const initialFpsRef = useRef(settings.fps)
+
+  // Visual delay for FFT so spectrum matches audio playback
+  const fftVisualDelayMs = 0
+
+  // Channels
+  const videoChannel = useMemo(() => new MessageChannel(), [])
+  const audioChannel = useMemo(() => new MessageChannel(), [])
+
+  // Projection worker setup
+  const carplayWorker = useMemo<ProjectionWorker>(() => {
+    const w = createProjectionWorker()
+
+    w.onerror = (e) => {
+      console.error('Worker error:', e)
+    }
+
+    w.postMessage(
+      {
+        type: 'initialise',
+        payload: {
+          audioPort: audioChannel.port1
+        }
+      },
+      [audioChannel.port1]
+    )
+    return w
+  }, [audioChannel])
+
+  // Render worker setup
+  useEffect(() => {
+    if (canvasRef.current && !offscreenCanvasRef.current && !renderWorkerRef.current) {
+      offscreenCanvasRef.current = canvasRef.current.transferControlToOffscreen()
+      const w = createRenderWorker()
+      renderWorkerRef.current = w
+
+      const targetFps = initialFpsRef.current
+
+      w.postMessage(new InitEvent(offscreenCanvasRef.current, videoChannel.port2, targetFps), [
+        offscreenCanvasRef.current,
+        videoChannel.port2
+      ])
+    }
+    // Cleanup when canvas is unmounted
+    return () => {
+      renderWorkerRef.current?.terminate()
+      renderWorkerRef.current = null
+      offscreenCanvasRef.current = null
+    }
+  }, [videoChannel])
+
+  useEffect(() => {
+    if (!renderWorkerRef.current) return
+    renderWorkerRef.current.postMessage(new UpdateFpsEvent(settings.fps))
+  }, [settings.fps])
+
+  useEffect(() => {
+    const w = renderWorkerRef.current
+    if (!w) return
+
+    type RenderWorkerMsg =
+      | { type: 'render-ready' }
+      | { type: 'render-error'; message?: string }
+      | { type: string; [key: string]: unknown }
+
+    const isRecord = (v: unknown): v is Record<string, unknown> =>
+      typeof v === 'object' && v !== null
+
+    const readWorkerMsg = (data: unknown): RenderWorkerMsg | null => {
+      if (!isRecord(data)) return null
+      const t = data.type
+      if (typeof t !== 'string') return null
+      return data as RenderWorkerMsg
+    }
+
+    const handler = (ev: MessageEvent<unknown>) => {
+      const msg = readWorkerMsg(ev.data)
+      const t = msg?.type
+
+      if (t === 'render-ready') {
+        console.log('[CARPLAY] Render worker ready message received')
+        setRenderReady(true)
+        setRendererError(null)
+        return
+      }
+
+      if (t === 'render-error') {
+        const message = msg && typeof msg.message === 'string' ? msg.message.trim() : ''
+        const text = message ? message : 'No renderer available'
+
+        console.warn('[CARPLAY] Render worker error:', msg)
+
+        setRendererError(text)
+        setRenderReady(false)
+        setReceivingVideo(false)
+        w.postMessage({ type: 'clear' })
+      }
+    }
+
+    w.addEventListener('message', handler)
+    return () => w.removeEventListener('message', handler)
+  }, [setReceivingVideo])
+
+  // Forward video chunks to worker port
+  useEffect(() => {
+    const handleVideo = (payload: unknown) => {
+      if (rendererError) return
+      if (!renderReady || !payload || typeof payload !== 'object') return
+      const m = payload as { chunk?: { buffer?: ArrayBuffer } }
+      const buf = m.chunk?.buffer
+      if (!buf) return
+      videoChannel.port1.postMessage(buf, [buf])
+    }
+    window.projection.ipc.onVideoChunk(handleVideo)
+    return () => window.projection.ipc.offVideoChunk(handleVideo)
+  }, [videoChannel, renderReady, rendererError])
+
+  // Forward audio chunks to FFT
+  useEffect(() => {
+    const timers = new Set<number>()
+
+    const handleAudio = (payload: unknown) => {
+      if (!payload || typeof payload !== 'object') return
+
+      const m = payload as { chunk?: { buffer?: ArrayBuffer } } & Record<string, unknown>
+      const buf = m.chunk?.buffer
+      if (!buf) return
+
+      // mono Int16 from main -> Float32 [-1, 1] for FFT
+      const int16 = new Int16Array(buf)
+      const f32 = new Float32Array(int16.length)
+      for (let i = 0; i < int16.length; i += 1) {
+        f32[i] = int16[i] / 32768
+      }
+
+      const id = window.setTimeout(() => {
+        timers.delete(id)
+        setPcmData(f32)
+      }, fftVisualDelayMs)
+      timers.add(id)
+    }
+
+    window.projection.ipc.onAudioChunk(handleAudio)
+
+    return () => {
+      window.projection.ipc.offAudioChunk(handleAudio)
+      for (const id of timers) {
+        window.clearTimeout(id)
+      }
+      timers.clear()
+    }
+  }, [setPcmData, fftVisualDelayMs])
+
+  // Audio + touch hooks
+
+  const clearRetryTimeout = useCallback(() => {
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current)
+      retryTimeoutRef.current = null
+    }
+  }, [])
+
+  const gotoHostUI = useCallback(() => {
+    if (location.pathname !== '/media') {
+      navigate('/media', { replace: true })
+    }
+  }, [location.pathname, navigate])
+
+  const applyAttention = useCallback(
+    (p: AttentionPayload) => {
+      const inCarplay = location.pathname === '/'
+
+      if (p.kind !== 'call' && p.kind !== 'siri') return
+
+      // ACTIVE: switch to projection
+      if (p.active) {
+        if (p.kind === 'siri') clearSiriReleaseTimer()
+
+        // Already on projection -> nothing to do
+        if (inCarplay) {
+          attentionSwitchedByRef.current = null
+          return
+        }
+
+        // Not on projection -> we will switch now, so arm return
+        attentionBackPathRef.current = location.pathname
+        attentionSwitchedByRef.current = p.kind
+
+        navigate('/', { replace: true })
+        return
+      }
+
+      // INACTIVE: only return if we previously switched because of this kind
+      if (attentionSwitchedByRef.current !== p.kind) return
+
+      const back = attentionBackPathRef.current
+
+      const doReturn = () => {
+        attentionSwitchedByRef.current = null
+        if (back && back !== '/' && location.pathname === '/') {
+          navigate(back, { replace: true })
+        }
+      }
+
+      // Siri: debounce return to avoid flicker
+      if (p.kind === 'siri') {
+        clearSiriReleaseTimer()
+        siriReleaseTimerRef.current = window.setTimeout(() => {
+          siriReleaseTimerRef.current = null
+
+          if (attentionSwitchedByRef.current !== 'siri') return
+
+          doReturn()
+        }, 120)
+
+        return
+      }
+
+      // Call: return immediately
+      doReturn()
+    },
+    [location.pathname, navigate, clearSiriReleaseTimer]
+  )
+
+  // Projection worker messages
+  useEffect(() => {
+    if (!carplayWorker) return
+    const handler = (ev: MessageEvent<WorkerToUI>) => {
+      const msg = ev.data
+      switch (msg.type) {
+        case 'requestBuffer': {
+          clearRetryTimeout()
+          break
+        }
+
+        case 'audio': {
+          clearRetryTimeout()
+          break
+        }
+
+        case 'audioInfo':
+          setAudioInfo((msg as Extract<WorkerToUI, { type: 'audioInfo' }>).payload)
+          break
+
+        case 'pcmData':
+          setPcmData(new Float32Array((msg as Extract<WorkerToUI, { type: 'pcmData' }>).payload))
+          break
+
+        case 'command': {
+          const val = (msg as Extract<WorkerToUI, { type: 'command' }>).message?.value
+          if (val === CommandMapping.requestHostUI) gotoHostUI()
+          break
+        }
+
+        case 'dongleInfo': {
+          break
+        }
+
+        case 'failure':
+          hasStartedRef.current = false
+          if (!retryTimeoutRef.current) {
+            retryTimeoutRef.current = setTimeout(() => window.location.reload(), RETRY_DELAY_MS)
+          }
+          break
+      }
+    }
+
+    carplayWorker.addEventListener('message', handler)
+    return () => carplayWorker.removeEventListener('message', handler)
+  }, [
+    carplayWorker,
+    clearRetryTimeout,
+    gotoHostUI,
+    setDeviceInfo,
+    setAudioInfo,
+    setPcmData,
+    setReceivingVideo
+  ])
+
+  // USB events
+  useEffect(() => {
+    let disposed = false
+
+    const onUsbConnect = async () => {
+      const token = ++usbOpTokenRef.current
+      if (!hasStartedRef.current) {
+        resetInfo()
+
+        let info:
+          | { device: false; vendorId: null; productId: null; usbFwVersion: string }
+          | { device: true; vendorId: number; productId: number; usbFwVersion: string }
+          | null = null
+
+        try {
+          info = await window.projection.usb.getDeviceInfo()
+        } catch (e) {
+          console.warn('[CARPLAY] usb.getDeviceInfo() failed', e)
+        }
+
+        if (disposed || token !== usbOpTokenRef.current) return
+
+        if (info?.device) {
+          setDeviceInfo({
+            vendorId: info.vendorId,
+            productId: info.productId,
+            usbFwVersion: info.usbFwVersion ?? ''
+          })
+        }
+
+        setDongleConnected(true)
+        hasStartedRef.current = true
+        await window.projection.ipc.start()
+      }
+    }
+
+    const onUsbDisconnect = async () => {
+      const token = ++usbOpTokenRef.current
+      clearRetryTimeout()
+      setReceivingVideo(false)
+      setStreaming(false)
+      setDongleConnected(false)
+      hasStartedRef.current = false
+      resetInfo()
+      await window.projection.ipc.stop()
+
+      if (disposed || token !== usbOpTokenRef.current) return
+
+      if (canvasRef.current) {
+        canvasRef.current.style.width = '0'
+        canvasRef.current.style.height = '0'
+      }
+    }
+    const usbHandler = (_evt: unknown, ...args: unknown[]) => {
+      const data = args[0] as UsbEvent | undefined
+      if (!data) return
+      if (data.type === 'plugged') onUsbConnect()
+      else if (data.type === 'unplugged') onUsbDisconnect()
+    }
+
+    window.projection.usb.listenForEvents(usbHandler)
+    ;(async () => {
+      const last = await window.projection.usb.getLastEvent()
+      if (last) usbHandler(undefined, last as unknown)
+    })()
+
+    return () => {
+      disposed = true
+      window.projection.usb.unlistenForEvents?.(usbHandler)
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      window.electron?.ipcRenderer.removeListener('usb-event', usbHandler)
+    }
+  }, [
+    setReceivingVideo,
+    setDongleConnected,
+    setStreaming,
+    clearRetryTimeout,
+    navigate,
+    resetInfo,
+    setDeviceInfo
+  ])
+
+  // Settings/events from main
+  useEffect(() => {
+    const mergeBoxInfo = (prev: unknown, next: unknown): unknown => {
+      if (next == null) return prev
+      if (typeof next === 'string') {
+        const s = next.trim()
+        if (!s) return prev
+        try {
+          next = JSON.parse(s)
+        } catch {
+          return prev
+        }
+      }
+      if (typeof prev === 'string') {
+        const s = prev.trim()
+        if (s) {
+          try {
+            prev = JSON.parse(s)
+          } catch {
+            prev = null
+          }
+        } else {
+          prev = null
+        }
+      }
+      const isRecord = (v: unknown): v is Record<string, unknown> =>
+        typeof v === 'object' && v !== null
+
+      if (isRecord(prev) && isRecord(next)) {
+        return { ...prev, ...next }
+      }
+      return next
+    }
+
+    const handler = (_evt: unknown, data: unknown) => {
+      const pathnameNow = pathnameRef.current
+
+      const d = (data ?? {}) as Record<string, unknown>
+      const t = typeof d.type === 'string' ? d.type : undefined
+
+      switch (t) {
+        case 'bluetoothPairedList': {
+          const raw =
+            typeof d.payload === 'string'
+              ? d.payload
+              : typeof (d.payload as { data?: unknown } | undefined)?.data === 'string'
+                ? ((d.payload as { data?: string }).data as string)
+                : typeof d.data === 'string'
+                  ? (d.data as string)
+                  : ''
+
+          setBluetoothPairedList(raw)
+          break
+        }
+        case 'resolution': {
+          const payload = d.payload as { width?: number; height?: number } | undefined
+          if (payload && typeof payload.width === 'number' && typeof payload.height === 'number') {
+            useLiviStore.setState({
+              negotiatedWidth: payload.width,
+              negotiatedHeight: payload.height
+            })
+
+            useStatusStore.setState({ isStreaming: true })
+            if (!rendererError) {
+              setReceivingVideo(true)
+            }
+
+            if (pendingVideoFocusRef.current) {
+              pendingVideoFocusRef.current = false
+              if (pathnameNow !== '/') {
+                navigate('/', { replace: true })
+              }
+            }
+          }
+          break
+        }
+
+        case 'dongleInfo': {
+          const p = d.payload as { dongleFwVersion?: string; boxInfo?: unknown } | undefined
+          if (!p) break
+          useLiviStore.setState((s) => ({
+            dongleFwVersion: p.dongleFwVersion ?? s.dongleFwVersion,
+            boxInfo: mergeBoxInfo(s.boxInfo, p.boxInfo)
+          }))
+          break
+        }
+
+        case 'audio': {
+          const cmd = (d as { payload?: { command?: number } }).payload?.command
+          if (typeof cmd !== 'number') break
+
+          if (cmd === AudioCommand.AudioPhonecallStart) {
+            if (autoSwitchOnPhoneCallRef.current) {
+              applyAttention({ kind: 'call', active: true, phase: 'active' })
+            }
+          } else if (cmd === AudioCommand.AudioPhonecallStop) {
+            applyAttention({ kind: 'call', active: false, phase: 'ended' })
+          } else if (cmd === AudioCommand.AudioAttentionRinging) {
+            if (autoSwitchOnPhoneCallRef.current) {
+              applyAttention({ kind: 'call', active: true, phase: 'ringing' })
+            }
+          } else if (cmd === AudioCommand.AudioSiriStart) {
+            applyAttention({ kind: 'siri', active: true })
+          } else if (cmd === AudioCommand.AudioSiriStop) {
+            applyAttention({ kind: 'siri', active: false })
+          }
+          break
+        }
+
+        case 'audioInfo': {
+          const p = d.payload as
+            | {
+                codec?: string
+                sampleRate?: number
+                channels?: number
+                bitDepth?: number
+              }
+            | undefined
+
+          if (!p) break
+
+          setAudioInfo({
+            codec: p.codec ?? '',
+            sampleRate: p.sampleRate ?? 0,
+            channels: p.channels ?? 0,
+            bitDepth: p.bitDepth ?? 0
+          })
+
+          break
+        }
+
+        case 'command': {
+          const value = (d as { message?: { value?: number } }).message?.value
+          if (typeof value !== 'number') break
+
+          if (value === CommandMapping.requestHostUI) {
+            gotoHostUI()
+            break
+          }
+
+          const mapsEnabled = Boolean(settings.mapsEnabled)
+          const autoSwitchOnStream = autoSwitchOnStreamRef.current
+          const autoSwitchOnGuidance = autoSwitchOnGuidanceRef.current
+
+          if (value === CommandMapping.naviFocus) {
+            if (!autoSwitchOnGuidance) break
+
+            if (mapsEnabled) {
+              if (pathnameNow === '/' || pathnameNow === '/maps') break
+
+              lastNonMapsPathRef.current = pathnameNow
+              navigate('/maps', { replace: true })
+              break
+            }
+
+            if (pathnameNow !== '/') {
+              setNavVideoOverlayActive(true)
+            }
+            break
+          }
+
+          if (value === CommandMapping.naviRelease) {
+            if (!autoSwitchOnGuidance) break
+            if (mapsEnabled) {
+              const back = lastNonMapsPathRef.current
+              if (back && back !== '/maps' && back !== '/') {
+                lastNonMapsPathRef.current = null
+                navigate(back, { replace: true })
+              }
+              break
+            }
+
+            setNavVideoOverlayActive(false)
+            break
+          }
+
+          if (value === CommandMapping.requestVideoFocus) {
+            if (!autoSwitchOnStream) break
+            if (attentionSwitchedByRef.current) break
+
+            if (pathnameNow !== '/' && pathnameNow !== '/maps') {
+              lastNonCarplayPathRef.current = pathnameNow
+              autoSwitchedRef.current = true
+            }
+
+            if (!isStreaming) {
+              pendingVideoFocusRef.current = true
+              break
+            }
+
+            if (pathnameNow !== '/') {
+              navigate('/', { replace: true })
+            }
+            break
+          }
+
+          if (value === CommandMapping.releaseVideoFocus) {
+            if (!autoSwitchOnStream) {
+              pendingVideoFocusRef.current = false
+              autoSwitchedRef.current = false
+              lastNonCarplayPathRef.current = null
+              break
+            }
+
+            const backFromMaps = lastNonMapsPathRef.current
+
+            if (
+              mapsEnabled &&
+              pathnameNow === '/maps' &&
+              backFromMaps &&
+              backFromMaps !== '/maps' &&
+              backFromMaps !== '/'
+            ) {
+              lastNonMapsPathRef.current = null
+              navigate(backFromMaps, { replace: true })
+              break
+            }
+
+            if (attentionSwitchedByRef.current) {
+              autoSwitchedRef.current = false
+              lastNonCarplayPathRef.current = null
+              break
+            }
+
+            if (autoSwitchedRef.current && lastNonCarplayPathRef.current) {
+              navigate(lastNonCarplayPathRef.current, { replace: true })
+            }
+            autoSwitchedRef.current = false
+            lastNonCarplayPathRef.current = null
+            break
+          }
+          break
+        }
+      }
+    }
+
+    window.projection.ipc.onEvent(handler)
+    return () => window.projection.ipc.offEvent(handler)
+  }, [
+    gotoHostUI,
+    setReceivingVideo,
+    navigate,
+    isStreaming,
+    setNavVideoOverlayActive,
+    applyAttention,
+    rendererError,
+    setAudioInfo,
+    setBluetoothPairedList,
+    settings.mapsEnabled
+  ])
+
+  // Resize observer => inform render worker
+  useEffect(() => {
+    if (!carplayWorker || !mainElem.current) return
+    const obs = new ResizeObserver(() => carplayWorker.postMessage({ type: 'frame' }))
+    obs.observe(mainElem.current)
+    return () => obs.disconnect()
+  }, [carplayWorker])
+
+  // Key commands
+  useEffect(() => {
+    if (!commandCounter) return
+    if (!isStreaming) return
+
+    window.projection.ipc.sendCommand(command)
+  }, [command, commandCounter, isStreaming])
+
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current)
+        retryTimeoutRef.current = null
+      }
+
+      carplayWorker.terminate()
+    }
+  }, [carplayWorker])
+
+  // Force-hide video when not streaming
+  useEffect(() => {
+    if (!isStreaming) {
+      setReceivingVideo(false)
+      if (canvasRef.current) {
+        canvasRef.current.style.width = '0'
+        canvasRef.current.style.height = '0'
+      }
+      renderWorkerRef.current?.postMessage({ type: 'clear' })
+    }
+  }, [isStreaming, setReceivingVideo])
+
+  /* ------------------------------- UI binding ------------------------------ */
+
+  const mode: 'dongle' | 'phone' = !isDongleConnected ? 'dongle' : 'phone'
+
+  const inCarplay = pathname === '/'
+  const showCarplayOverlay = inCarplay || navVideoOverlayActive
+
+  const resolvedNegotiatedWidth = negotiatedWidth ?? 0
+  const resolvedNegotiatedHeight = negotiatedHeight ?? 0
+
+  const viewportWidth = viewportSize.width
+  const viewportHeight = viewportSize.height
+
+  const mdLinkType =
+    boxInfo && typeof boxInfo === 'object' && 'MDLinkType' in boxInfo
+      ? String((boxInfo as { MDLinkType?: unknown }).MDLinkType ?? '')
+      : ''
+
+  const normalizedLinkType = mdLinkType.trim().toLowerCase()
+  const isAndroidAutoActive = normalizedLinkType.includes('android')
+
+  const aaVisibleSize =
+    settings.width > 0 && settings.height > 0
+      ? matchFittingAAResolution({
+          width: settings.width,
+          height: settings.height
+        })
+      : null
+
+  const isAndroidAutoTiered =
+    isAndroidAutoActive &&
+    aaVisibleSize !== null &&
+    resolvedNegotiatedWidth > 0 &&
+    resolvedNegotiatedHeight > 0 &&
+    (resolvedNegotiatedWidth !== aaVisibleSize.width ||
+      resolvedNegotiatedHeight !== aaVisibleSize.height)
+
+  const visibleWidth = isAndroidAutoTiered
+    ? Math.min(aaVisibleSize.width, resolvedNegotiatedWidth)
+    : resolvedNegotiatedWidth
+
+  const visibleHeight = isAndroidAutoTiered
+    ? Math.min(aaVisibleSize.height, resolvedNegotiatedHeight)
+    : resolvedNegotiatedHeight
+
+  const cropLeft =
+    isAndroidAutoTiered && resolvedNegotiatedWidth > visibleWidth
+      ? (resolvedNegotiatedWidth - visibleWidth) / 2
+      : 0
+
+  const cropTop =
+    isAndroidAutoTiered && resolvedNegotiatedHeight > visibleHeight
+      ? (resolvedNegotiatedHeight - visibleHeight) / 2
+      : 0
+
+  const touchHandlers = useCarplayMultiTouch(
+    videoContainerRef,
+    isAndroidAutoTiered
+      ? {
+          streamWidth: resolvedNegotiatedWidth,
+          streamHeight: resolvedNegotiatedHeight,
+          cropLeft,
+          cropTop,
+          visibleWidth,
+          visibleHeight
+        }
+      : undefined
+  )
+
+  const scaleX = visibleWidth > 0 && viewportWidth > 0 ? viewportWidth / visibleWidth : 0
+  const scaleY = visibleHeight > 0 && viewportHeight > 0 ? viewportHeight / visibleHeight : 0
+
+  const canvasCssWidth = scaleX > 0 ? `${resolvedNegotiatedWidth * scaleX}px` : '0px'
+  const canvasCssHeight = scaleY > 0 ? `${resolvedNegotiatedHeight * scaleY}px` : '0px'
+  const canvasCssLeft = scaleX > 0 ? `${-cropLeft * scaleX}px` : '0px'
+  const canvasCssTop = scaleY > 0 ? `${-cropTop * scaleY}px` : '0px'
+
+  return (
+    <div
+      id="projection-root"
+      ref={mainElem}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        width: '100%',
+        height: '100%',
+        touchAction: 'none',
+        ...(settings.displayMode === 'round' ? { borderRadius: '50%', overflow: 'hidden' } : {}),
+        // show as full UI when on "/" OR as overlay when navFocusActive
+        visibility: showCarplayOverlay ? 'visible' : 'hidden',
+        opacity: showCarplayOverlay ? 1 : 0,
+        transition: 'opacity 120ms ease',
+        pointerEvents: inCarplay && isStreaming ? 'auto' : 'none',
+        zIndex: showCarplayOverlay ? 999 : -1
+      }}
+    >
+      {pathname === '/' && (
+        <StatusOverlay
+          show={!isDongleConnected || !isStreaming}
+          mode={mode}
+          offsetX={overlayX}
+          offsetY={overlayY}
+        />
+      )}
+
+      <div
+        id="videoContainer"
+        ref={videoContainerRef}
+        {...touchHandlers}
+        style={{
+          height: '100%',
+          width: '100%',
+          padding: 0,
+          margin: 0,
+          display: 'block',
+          touchAction: 'none',
+          backgroundColor:
+            receivingVideo && !rendererError ? '#000' : theme.palette.background.default,
+          visibility: receivingVideo && !rendererError ? 'visible' : 'hidden',
+          zIndex: receivingVideo && !rendererError ? 1 : -1,
+          position: 'relative',
+          overflow: 'hidden'
+        }}
+      >
+        <canvas
+          ref={canvasRef}
+          id="video"
+          style={{
+            width: receivingVideo && !rendererError ? canvasCssWidth : '0px',
+            height: receivingVideo && !rendererError ? canvasCssHeight : '0px',
+            position: 'absolute',
+            left: receivingVideo && !rendererError ? canvasCssLeft : '0px',
+            top: receivingVideo && !rendererError ? canvasCssTop : '0px',
+            maxWidth: 'none',
+            maxHeight: 'none',
+            touchAction: 'none',
+            userSelect: 'none',
+            pointerEvents: 'none',
+            display: 'block'
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
+export const Projection = React.memo(CarplayComponent)

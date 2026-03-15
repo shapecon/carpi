@@ -2,7 +2,7 @@ import { FC, PropsWithChildren, useCallback, useEffect, useRef, useState } from 
 import { useLocation } from 'react-router'
 import { Nav } from '../navigation'
 import { RoundNav } from '../navigation/RoundNav'
-import { useCarplayStore, useStatusStore } from '@store/store'
+import { useLiviStore, useStatusStore } from '@store/store'
 import { AppLayoutProps } from './types'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
@@ -20,7 +20,7 @@ export const AppLayout: FC<PropsWithChildren<AppLayoutProps>> = ({
   receivingVideo
 }) => {
   const { pathname } = useLocation()
-  const settings = useCarplayStore((s) => s.settings)
+  const settings = useLiviStore((s) => s.settings)
   const isStreaming = useStatusStore((s) => s.isStreaming)
   const time = useBlinkingTime()
   const network = useNetworkStatus()
@@ -79,16 +79,27 @@ export const AppLayout: FC<PropsWithChildren<AppLayoutProps>> = ({
       showNavAndArmHide()
     }
 
+    const onFocusIn: EventListener = () => {
+      const navEl = navRef.current
+      const active = document.activeElement as HTMLElement | null
+
+      if (navEl && active && navEl.contains(active)) {
+        showNavAndArmHide()
+      }
+    }
+
     window.addEventListener('keydown', wake, { passive: true })
     document.addEventListener('mousemove', wake, { passive: true })
     document.addEventListener('wheel', wake, { passive: true })
+    document.addEventListener('focusin', onFocusIn)
 
     return () => {
       window.removeEventListener('keydown', wake)
       document.removeEventListener('mousemove', wake)
       document.removeEventListener('wheel', wake)
+      document.removeEventListener('focusin', onFocusIn)
     }
-  }, [inAutoHideNavPage, showNavAndArmHide])
+  }, [inAutoHideNavPage, showNavAndArmHide, navRef])
 
   // Hide nav column while streaming on home screen
   const hideNavHome = isStreaming && pathname === ROUTES.HOME

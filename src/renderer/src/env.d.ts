@@ -1,8 +1,8 @@
 /// <reference types="@webgpu/types" />
 
 import type { ElectronAPI } from '@electron-toolkit/preload'
-import type { ExtraConfig } from '../../main/Globals'
-import type { MultiTouchPoint } from '../../main/services/carplay/messages/sendable'
+import type { ExtraConfig, DongleFirmwareAction } from '@shared/types'
+import type { MultiTouchPoint } from '@shared/types/TouchTypes'
 
 // Should move to src/types/usb.ts
 interface USBDevice {
@@ -66,8 +66,6 @@ type MediaPayload = {
   }
 } | null
 
-type DongleFirmwareAction = 'check' | 'download' | 'upload' | 'status'
-
 type DongleFirmwareCheckResult =
   | {
       ok: true
@@ -91,6 +89,16 @@ type DongleFirmwareCheckResult =
     }
   | { ok: false; error: string }
 
+type DevToolsUploadResult = {
+  ok: boolean
+  cgiOk: boolean
+  webOk: boolean
+  urls: string[]
+  startedAt: string
+  finishedAt: string
+  durationMs: number
+}
+
 declare global {
   interface Navigator {
     usb: {
@@ -104,7 +112,7 @@ declare global {
   interface Window {
     electron: ElectronAPI
 
-    carplay: {
+    projection: {
       quit(): Promise<void>
       onUSBResetStatus(callback: (event: unknown, ...args: unknown[]) => void): void
 
@@ -115,7 +123,7 @@ declare global {
         getLastEvent(): Promise<unknown>
         getSysdefaultPrettyName(): Promise<string>
         uploadIcons(): Promise<void>
-        uploadLiviScripts(): Promise<{ ok: boolean; cgiOk: boolean; webOk: boolean }>
+        uploadLiviScripts(): Promise<DevToolsUploadResult>
         listenForEvents(callback: (event: unknown, ...args: unknown[]) => void): void
         unlistenForEvents(callback: (event: unknown, ...args: unknown[]) => void): void
       }
@@ -149,7 +157,9 @@ declare global {
         readNavigation(): Promise<unknown>
 
         onVideoChunk(handler: (payload: unknown) => void): void
+        offVideoChunk(handler: (payload: unknown) => void): void
         onAudioChunk(handler: (payload: unknown) => void): void
+        offAudioChunk(handler: (payload: unknown) => void): void
 
         requestMaps(enabled: boolean): Promise<{ ok: boolean; enabled: boolean }>
         onMapsVideoChunk(handler: (payload: unknown) => void): void
@@ -168,6 +178,7 @@ declare global {
       onUpdateProgress(cb: (payload: UpdateProgress) => void): () => void
       beginInstall(): Promise<void>
       abortUpdate(): Promise<void>
+      openExternal(url: string): Promise<{ ok: boolean; error?: string }>
     }
   }
 }

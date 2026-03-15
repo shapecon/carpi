@@ -12,40 +12,105 @@ import {
   Divider,
   LinearProgress,
   Stack,
+  TextField,
   Typography
 } from '@mui/material'
-import { useCarplayStore, useStatusStore } from '@store/store'
+import { useLiviStore, useStatusStore } from '@store/store'
 import { useNetworkStatus } from '@renderer/hooks/useNetworkStatus'
 import { fmt, isDongleFwCheckResponse, normalizeBoxInfo } from './utils'
-import { DongleFwCheckResponse, FwDialogState, Row } from './types'
+import { DongleFwCheckResponse, FwDialogState, Row } from '@renderer/types'
 import { EMPTY_STRING } from '@renderer/constants'
+import { useTranslation } from 'react-i18next'
+
+type DevToolsStatus = 'idle' | 'uploading' | 'opening' | 'success' | 'partial' | 'error'
+type DevToolsUploadResult = Awaited<ReturnType<typeof window.projection.usb.uploadLiviScripts>>
+
+function dedupe(list: string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const item of list) {
+    if (seen.has(item)) continue
+    seen.add(item)
+    out.push(item)
+  }
+  return out
+}
+
+function rankDevUrl(url: string): number {
+  if (url.includes('/index.html')) return 0
+  if (url.includes('/cgi-bin/server.cgi?action=ls&path=/')) return 1
+  return 2
+}
+
+function toIndexCandidates(urls: string[]): string[] {
+  const hosts = new Set<string>()
+  for (const raw of urls) {
+    if (!/^https?:\/\//i.test(raw)) continue
+    try {
+      const u = new URL(raw)
+      if (!u.host) continue
+      hosts.add(u.host)
+    } catch {
+      // ignore malformed candidate
+    }
+  }
+  return Array.from(hosts).map((host) => `http://${host}/index.html`)
+}
+
+function normalizeIp(raw: string): string {
+  return String(raw ?? '').trim()
+}
+
+function maskIpv4Input(raw: string): string {
+  const cleaned = String(raw ?? '').replace(/[^\d.]/g, '')
+  const parts = cleaned.split('.').slice(0, 4)
+  return parts
+    .map((p) => p.replace(/\D/g, '').slice(0, 3))
+    .join('.')
+    .slice(0, 15)
+}
+
+function isValidIpv4(raw: string): boolean {
+  const ip = normalizeIp(raw)
+  if (!ip) return false
+  const parts = ip.split('.')
+  if (parts.length !== 4) return false
+  return parts.every((p) => {
+    if (!/^\d+$/.test(p)) return false
+    const n = Number(p)
+    return n >= 0 && n <= 255
+  })
+}
 
 export function USBDongle() {
+  const { t } = useTranslation()
   const isDongleConnected = useStatusStore((s) => s.isDongleConnected)
   const isStreaming = useStatusStore((s) => s.isStreaming)
+  const settings = useLiviStore((s) => s.settings)
+  const saveSettings = useLiviStore((s) => s.saveSettings)
 
   // Network status
   const network = useNetworkStatus()
   const isOnline = network.online
 
   // USB descriptor
-  const vendorId = useCarplayStore((s) => s.vendorId)
-  const productId = useCarplayStore((s) => s.productId)
-  const usbFwVersion = useCarplayStore((s) => s.usbFwVersion)
+  const vendorId = useLiviStore((s) => s.vendorId)
+  const productId = useLiviStore((s) => s.productId)
+  const usbFwVersion = useLiviStore((s) => s.usbFwVersion)
 
   // Dongle Info
-  const dongleFwVersion = useCarplayStore((s) => s.dongleFwVersion)
-  const boxInfoRaw = useCarplayStore((s) => s.boxInfo)
+  const dongleFwVersion = useLiviStore((s) => s.dongleFwVersion)
+  const boxInfoRaw = useLiviStore((s) => s.boxInfo)
 
   // Video stream (negotiated)
-  const negotiatedWidth = useCarplayStore((s) => s.negotiatedWidth)
-  const negotiatedHeight = useCarplayStore((s) => s.negotiatedHeight)
+  const negotiatedWidth = useLiviStore((s) => s.negotiatedWidth)
+  const negotiatedHeight = useLiviStore((s) => s.negotiatedHeight)
 
   // Audio stream
-  const audioCodec = useCarplayStore((s) => s.audioCodec)
-  const audioSampleRate = useCarplayStore((s) => s.audioSampleRate)
-  const audioChannels = useCarplayStore((s) => s.audioChannels)
-  const audioBitDepth = useCarplayStore((s) => s.audioBitDepth)
+  const audioCodec = useLiviStore((s) => s.audioCodec)
+  const audioSampleRate = useLiviStore((s) => s.audioSampleRate)
+  const audioChannels = useLiviStore((s) => s.audioChannels)
+  const audioBitDepth = useLiviStore((s) => s.audioBitDepth)
 
   // Auto-close dialog
   const autoCloseTimerRef = useRef<number | null>(null)
@@ -53,9 +118,13 @@ export function USBDongle() {
   const [fwSawDisconnect, setFwSawDisconnect] = useState(false)
 
   // Dev tools
-  const [devBusy, setDevBusy] = useState(false)
-  const [devOk, setDevOk] = useState<null | { ok: boolean; cgiOk: boolean; webOk: boolean }>(null)
+  const [devStatus, setDevStatus] = useState<DevToolsStatus>('idle')
+  const [devResult, setDevResult] = useState<DevToolsUploadResult | null>(null)
   const [devError, setDevError] = useState<string | null>(null)
+  const [devOpenedUrl, setDevOpenedUrl] = useState<string | null>(null)
+  const [devLog, setDevLog] = useState<string[]>([])
+  const [devIpInput, setDevIpInput] = useState('')
+  const [devIpFocused, setDevIpFocused] = useState(false)
 
   // Parsed box info
   const boxInfo = useMemo(() => normalizeBoxInfo(boxInfoRaw), [boxInfoRaw])
@@ -207,32 +276,120 @@ export function USBDongle() {
 
   const canUpload = fwBusy == null && Boolean(isDongleConnected) && shouldOfferUpload
 
+  const devBusy = devStatus === 'uploading' || devStatus === 'opening'
   const canEnableDevTools = !devBusy && Boolean(isDongleConnected)
 
+  const pushDevLog = useCallback((line: string) => {
+    const ts = new Date().toISOString().slice(11, 19)
+    setDevLog((prev) => [...prev, `[${ts}] ${line}`].slice(-10))
+  }, [])
+
+  const devUrlCandidates = useMemo(() => {
+    const urls = dedupe(devResult?.urls ?? [])
+    return urls.sort((a, b) => rankDevUrl(a) - rankDevUrl(b))
+  }, [devResult])
+
+  useEffect(() => {
+    setDevIpInput(normalizeIp(settings?.dongleToolsIp ?? ''))
+  }, [settings?.dongleToolsIp])
+
   const handleEnableDevTools = useCallback(async () => {
+    if (devBusy) return
     setDevError(null)
-    setDevOk(null)
+    setDevResult(null)
+    setDevOpenedUrl(null)
+    setDevLog([])
 
     try {
-      setDevBusy(true)
-      const res = await window.carplay.usb.uploadLiviScripts()
-      setDevOk(res)
+      setDevStatus('uploading')
+      pushDevLog(t('settings.devToolsLogUploadStart'))
+      const configuredIp = normalizeIp(devIpInput)
+
+      if (configuredIp && !isValidIpv4(configuredIp)) {
+        throw new Error(t('settings.devToolsInvalidIp', { ip: configuredIp }))
+      }
+
+      await saveSettings({ dongleToolsIp: configuredIp })
+      if (configuredIp) {
+        pushDevLog(t('settings.devToolsLogUsingIp', { ip: configuredIp }))
+      } else {
+        pushDevLog(t('settings.devToolsLogUsingAutoCandidates'))
+      }
+
+      const res = await window.projection.usb.uploadLiviScripts()
+      setDevResult(res)
+      pushDevLog(
+        t('settings.devToolsLogUploadDone', {
+          ok: String(res.ok),
+          cgiOk: String(res.cgiOk),
+          webOk: String(res.webOk),
+          durationMs: res.durationMs
+        })
+      )
 
       if (!res.ok) {
-        setDevError(`Upload failed (cgiOk=${String(res.cgiOk)}, webOk=${String(res.webOk)})`)
+        setDevStatus('partial')
+        setDevError(
+          t('settings.devToolsPartial', {
+            cgiOk: String(res.cgiOk),
+            webOk: String(res.webOk)
+          })
+        )
+        return
       }
+
+      const openTargets = configuredIp
+        ? [`http://${configuredIp}/index.html`]
+        : dedupe(toIndexCandidates(res.urls ?? [])).sort((a, b) => rankDevUrl(a) - rankDevUrl(b))
+      if (openTargets.length === 0) {
+        setDevStatus('success')
+        pushDevLog(t('settings.devToolsLogNoCandidates'))
+        return
+      }
+
+      setDevStatus('opening')
+      pushDevLog(t('settings.devToolsLogOpeningCount', { count: openTargets.length }))
+
+      let openedCount = 0
+      let firstOpened: string | null = null
+      for (const url of openTargets) {
+        const openRes = await window.app.openExternal(url)
+        if (openRes?.ok) {
+          openedCount += 1
+          firstOpened ??= url
+        } else {
+          pushDevLog(
+            t('settings.devToolsLogOpenFailed', {
+              url,
+              error: openRes?.error || t('settings.devToolsUnknownError')
+            })
+          )
+        }
+      }
+
+      if (openedCount === 0) {
+        throw new Error(t('settings.devToolsOpenNoneFailed'))
+      }
+
+      setDevOpenedUrl(firstOpened)
+      setDevStatus('success')
+      pushDevLog(
+        t('settings.devToolsLogOpenDone', { opened: openedCount, total: openTargets.length })
+      )
     } catch (e) {
+      setDevStatus('error')
       setDevError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setDevBusy(false)
+      pushDevLog(`Error: ${e instanceof Error ? e.message : String(e)}`)
     }
-  }, [])
+  }, [devBusy, devIpInput, pushDevLog, saveSettings, t])
 
   useEffect(() => {
     if (isDongleConnected) return
-    setDevOk(null)
+    setDevStatus('idle')
+    setDevResult(null)
+    setDevOpenedUrl(null)
     setDevError(null)
-    setDevBusy(false)
+    setDevLog([])
   }, [isDongleConnected])
 
   const fwPct = useMemo(() => {
@@ -432,9 +589,9 @@ export function USBDongle() {
       }
     }
 
-    window.carplay?.ipc?.onEvent?.(handler)
+    window.projection?.ipc?.onEvent?.(handler)
     return () => {
-      window.carplay?.ipc?.offEvent?.(handler)
+      window.projection?.ipc?.offEvent?.(handler)
     }
   }, [])
 
@@ -509,7 +666,7 @@ export function USBDongle() {
         // Preflight for download: if already localReady -> just show dialog message and exit
         if (action === 'download') {
           try {
-            const st = await window.carplay.ipc.dongleFirmware('status')
+            const st = await window.projection.ipc.dongleFirmware('status')
             if (isDongleFwCheckResponse(st)) {
               setFwResult((prev) => {
                 if (!prev) return st
@@ -576,7 +733,7 @@ export function USBDongle() {
         }
 
         // Call preload -> main IPC
-        const raw = await window.carplay.ipc.dongleFirmware(action)
+        const raw = await window.projection.ipc.dongleFirmware(action)
 
         if (!isDongleFwCheckResponse(raw)) {
           setFwResult(null)
@@ -721,7 +878,7 @@ export function USBDongle() {
       { label: 'HW', value: fmt(boxInfo?.hwVersion), mono: true },
       { label: 'BoxType', value: fmt(boxInfo?.boxType) },
       { label: 'OEM', value: fmt(boxInfo?.OemName) },
-      { label: 'WiFi Channel', value: boxInfo?.WiFiChannel ?? null, mono: true },
+      { label: 'WiFi Channel', value: boxInfo?.wifiChannel ?? null, mono: true },
       { label: 'Links', value: fmt(boxInfo?.supportLinkType) },
       { label: 'Features', value: fmt(boxInfo?.supportFeatures) },
       { label: 'CusCode', value: fmt(boxInfo?.CusCode), mono: true },
@@ -750,6 +907,82 @@ export function USBDongle() {
     ],
     [resolution, audioLine]
   )
+
+  const renderDeviceList = () => {
+    if (devList.length === 0) {
+      return renderRows([{ label: 'Device List', value: '—' }])
+    }
+
+    return (
+      <Stack spacing={1}>
+        {devList.map((d, i) => {
+          const idx = fmt(d.index) ?? String(i + 1)
+          const name = fmt(d.name) ?? '—'
+          const type = fmt(d.type) ?? '—'
+          const id = fmt(d.id) ?? '—'
+          const time = fmt(d.time) ?? '—'
+          const rfcomm = fmt(d.rfcomm) ?? '—'
+
+          return (
+            <Box
+              key={`${idx}-${id}-${i}`}
+              tabIndex={0}
+              role="group"
+              aria-label={`Device ${idx}`}
+              sx={{
+                px: 1,
+                py: 0.75,
+                borderRadius: 1.25,
+                outline: 'none',
+                '&:focus-visible': {
+                  bgcolor: 'action.selected'
+                }
+              }}
+            >
+              <Typography sx={{ mb: 0.5 }}>Device {idx}:</Typography>
+
+              <Stack spacing={0.5} sx={{ pl: 2 }}>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Typography sx={{ minWidth: 120 }} color="text.secondary">
+                    Name:
+                  </Typography>
+                  <Typography sx={{ ...Mono }}>{name}</Typography>
+                </Box>
+
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Typography sx={{ minWidth: 120 }} color="text.secondary">
+                    Type:
+                  </Typography>
+                  <Typography sx={{ ...Mono }}>{type}</Typography>
+                </Box>
+
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Typography sx={{ minWidth: 120 }} color="text.secondary">
+                    ID:
+                  </Typography>
+                  <Typography sx={{ ...Mono }}>{id}</Typography>
+                </Box>
+
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Typography sx={{ minWidth: 120 }} color="text.secondary">
+                    Time:
+                  </Typography>
+                  <Typography sx={{ ...Mono }}>{time}</Typography>
+                </Box>
+
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Typography sx={{ minWidth: 120 }} color="text.secondary">
+                    RFCOMM:
+                  </Typography>
+                  <Typography sx={{ ...Mono }}>{rfcomm}</Typography>
+                </Box>
+              </Stack>
+            </Box>
+          )
+        })}
+      </Stack>
+    )
+  }
 
   const renderRows = (rows: Row[]) => (
     <Stack spacing={0.5}>
@@ -800,6 +1033,47 @@ export function USBDongle() {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Typography variant="subtitle2" color="text.secondary">
+        Status
+      </Typography>
+      {renderRows(rowsTop)}
+
+      <Divider />
+
+      <Typography variant="subtitle2" color="text.secondary">
+        Streams
+      </Typography>
+      {renderRows(rowsStreams)}
+
+      <Divider />
+
+      <Typography variant="subtitle2" color="text.secondary">
+        USB Descriptor
+      </Typography>
+      {renderRows(rowsUsb)}
+
+      <Divider />
+
+      <Typography variant="subtitle2" color="text.secondary">
+        Dongle Info
+      </Typography>
+
+      {renderRows(rowsDongleInfo)}
+
+      <Divider sx={{ my: 1.5 }} />
+
+      <Typography variant="subtitle2" color="text.secondary">
+        Phone
+      </Typography>
+
+      {renderRows(rowsPhoneInfo)}
+
+      <Divider />
+
+      {renderDeviceList()}
+
+      <Divider />
+
       <Typography variant="subtitle2" color="text.secondary">
         Firmware
       </Typography>
@@ -938,122 +1212,104 @@ export function USBDongle() {
       <Divider />
 
       <Typography variant="subtitle2" color="text.secondary">
-        Dev Tools
+        {`${t('settings.devTools')} (${t('settings.mustBeOnDongleWifi')})`}
       </Typography>
 
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', px: 1 }}>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{ alignItems: 'flex-start', flexWrap: 'wrap', px: 1, mb: 1 }}
+      >
         <Button
           variant="outlined"
           size="small"
           disabled={!canEnableDevTools}
           onClick={handleEnableDevTools}
+          sx={{ height: 40 }}
         >
           {devBusy ? (
             <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1 }}>
               <CircularProgress size={14} />
-              Enabling…
+              {devStatus === 'opening' ? t('settings.opening') : t('settings.enabling')}
             </Box>
           ) : (
-            'Enable Dev Tools'
+            t('settings.enableDevTools')
           )}
         </Button>
+        <TextField
+          label={t('settings.dongleIpOptional')}
+          placeholder={
+            devIpFocused || devIpInput.length > 0
+              ? t('settings.dongleIpMaskPlaceholder')
+              : t('settings.dongleIpPlaceholder')
+          }
+          size="small"
+          sx={{ minWidth: 240, flex: '1 1 280px' }}
+          value={devIpInput}
+          disabled={devBusy}
+          onFocus={() => setDevIpFocused(true)}
+          onBlur={() => setDevIpFocused(false)}
+          onChange={(e) => setDevIpInput(maskIpv4Input(e.target.value))}
+          error={devIpInput.length > 0 && !isValidIpv4(devIpInput)}
+          inputProps={{ inputMode: 'numeric', maxLength: 15 }}
+          InputProps={{ sx: { height: 40 } }}
+          helperText={
+            devIpInput.length > 0 && !isValidIpv4(devIpInput) ? t('settings.enterValidIpv4') : ' '
+          }
+        />
       </Stack>
-
-      <Typography variant="caption" color="text.secondary" sx={{ px: 1.25, mt: 0.25 }}>
-        Temporarily replaces the dongle’s default Web UI.
-      </Typography>
-
+      {devBusy ? <LinearProgress sx={{ mt: 1 }} /> : null}
       {devError ? (
         <Alert severity="error" sx={{ mt: 1 }}>
           {devError}
         </Alert>
-      ) : devOk ? (
-        <Alert severity={devOk.ok ? 'success' : 'warning'} sx={{ mt: 1 }}>
-          {devOk.ok
-            ? `Dev tools enabled`
-            : `Partial result (cgiOk=${String(devOk.cgiOk)}, webOk=${String(devOk.webOk)})`}
+      ) : devResult ? (
+        <Alert severity={devResult.ok ? 'success' : 'warning'} sx={{ mt: 1 }}>
+          {devResult.ok
+            ? t('settings.devToolsEnabled')
+            : t('settings.devToolsPartial', {
+                cgiOk: String(devResult.cgiOk),
+                webOk: String(devResult.webOk)
+              })}
         </Alert>
       ) : null}
-
-      <Divider />
-
-      {renderRows(rowsTop)}
-
-      <Divider />
-
-      <Typography variant="subtitle2" color="text.secondary">
-        Streams
-      </Typography>
-      {renderRows(rowsStreams)}
-
-      <Divider />
-
-      <Typography variant="subtitle2" color="text.secondary">
-        USB Descriptor
-      </Typography>
-      {renderRows(rowsUsb)}
-
-      <Divider />
-
-      <Typography variant="subtitle2" color="text.secondary">
-        Dongle Info
-      </Typography>
-
-      {renderRows(rowsDongleInfo)}
-
-      <Divider sx={{ my: 1.5 }} />
-
-      <Typography variant="subtitle2" color="text.secondary">
-        Phone
-      </Typography>
-
-      {renderRows(rowsPhoneInfo)}
-
-      <Typography variant="subtitle2" color="text.secondary">
-        Paired / Connected Devices
-      </Typography>
-
-      {devList.length === 0 ? (
-        <Typography variant="body2" color="text.secondary">
-          — (no devices reported)
-        </Typography>
-      ) : (
-        <Stack spacing={1}>
-          {devList.map((d, i) => {
-            const idx = fmt(d.index) ?? String(i + 1)
-            const name = fmt(d.name) ?? '—'
-            const type = fmt(d.type) ?? '—'
-            const id = fmt(d.id) ?? '—'
-            const time = fmt(d.time) ?? '—'
-            const rfcomm = fmt(d.rfcomm) ?? '—'
-
-            return (
-              <Box
-                key={`${idx}-${id}-${i}`}
-                sx={{
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  borderRadius: 1.5,
-                  px: 1.25,
-                  py: 0.75
-                }}
-              >
-                <Typography sx={{ ...Mono }}>
-                  #{idx} • {name}
-                </Typography>
-
-                <Typography variant="body2" color="text.secondary" sx={{ ...Mono }}>
-                  {type} • {id}
-                </Typography>
-
-                <Typography variant="body2" color="text.secondary" sx={{ ...Mono }}>
-                  time={time} • rfcomm={rfcomm}
-                </Typography>
-              </Box>
-            )
-          })}
-        </Stack>
-      )}
+      {!devOpenedUrl && devUrlCandidates.length > 0 ? (
+        <Alert severity="info" sx={{ mt: 1 }}>
+          {t('settings.tryOneOfUrls')}
+          <Box component="ul" sx={{ m: 0, pl: 2 }}>
+            {devUrlCandidates.slice(0, 6).map((url) => (
+              <li key={url}>
+                <a href={url} target="_blank" rel="noreferrer">
+                  {url}
+                </a>
+              </li>
+            ))}
+          </Box>
+        </Alert>
+      ) : null}
+      {devLog.length > 0 ? (
+        <Box sx={{ mt: 1, px: 1 }}>
+          <Typography variant="caption" color="text.secondary">
+            {t('settings.devToolsLog')}
+          </Typography>
+          <Box
+            component="pre"
+            sx={{
+              m: 0,
+              p: 1,
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 1,
+              background: 'rgba(0,0,0,0.25)',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              ...Mono
+            }}
+          >
+            {devLog.join('\n')}
+          </Box>
+        </Box>
+      ) : null}
     </Box>
   )
 }

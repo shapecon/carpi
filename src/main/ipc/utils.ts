@@ -4,7 +4,8 @@ import { execFile } from 'node:child_process'
 import os from 'node:os'
 import { runtimeStateProps, UpdateEventPayload } from '@main/types'
 import { getMainWindow } from '@main/window/createWindow'
-import { DEFAULT_BINDINGS, ExtraConfig } from '@main/Globals'
+import { DEFAULT_BINDINGS } from '@shared/types'
+import type { ExtraConfig } from '@shared/types'
 import { applyNullDeletes, pushSettingsToRenderer, sizesEqual } from '@main/utils'
 import {
   applyAspectRatioFullscreen,
@@ -81,6 +82,8 @@ export function saveSettings(runtimeState: runtimeStateProps, next: Partial<Extr
   runtimeState.config = merged
 
   configEvents.emit('changed', merged, prev)
+
+  mainWindow?.webContents.setZoomFactor((runtimeState.config.uiZoomPercent ?? 100) / 100)
 
   pushSettingsToRenderer(runtimeState)
 

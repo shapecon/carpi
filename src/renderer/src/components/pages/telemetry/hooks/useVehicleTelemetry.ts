@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { TelemetryPayload as VehicleTelemetry } from '@main/services/Socket'
+import type { TelemetryPayload as VehicleTelemetry } from '@shared/types'
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null
@@ -26,10 +26,10 @@ export function useVehicleTelemetry() {
       setTelemetry((prev) => ({ ...(prev ?? {}), ...msg, ts }))
     }
 
-    window.carplay?.ipc?.onTelemetry?.(onMsg)
+    window.projection?.ipc?.onTelemetry?.(onMsg)
 
     return () => {
-      window.carplay?.ipc?.offTelemetry?.()
+      window.projection?.ipc?.offTelemetry?.()
     }
   }, [])
 

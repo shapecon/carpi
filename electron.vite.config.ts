@@ -1,5 +1,5 @@
 import { resolve } from 'path'
-import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
+import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
@@ -8,38 +8,50 @@ const BUILD_RUN = process.env.GITHUB_RUN_NUMBER || process.env.BUILD_RUN || ''
 const BUILD_BRANCH = process.env.BUILD_BRANCH || ''
 
 const alias = {
-  '@renderer': resolve(__dirname, 'src/renderer/src'),
-  '@carplay/web': resolve(__dirname, 'src/renderer/components/web/CarplayWeb.ts'),
-  '@carplay/messages': resolve(__dirname, 'src/main/carplay/messages'),
-  '@carplay': resolve(__dirname, 'src/main/carplay'),
+  '@projection/web': resolve(__dirname, 'src/renderer/components/web/CarplayWeb.ts'),
+  '@projection/messages': resolve(__dirname, 'src/main/services/projection/messages'),
+  '@projection': resolve(__dirname, 'src/main/services/projection'),
   '@main': path.resolve(__dirname, 'src/main'),
+  '@shared': path.resolve(__dirname, 'src/main/shared'),
+  '@audio': path.resolve(__dirname, 'src/main/audio')
+}
+
+const rendererAlias = {
+  '@renderer': resolve(__dirname, 'src/renderer/src'),
   '@worker': path.resolve(__dirname, 'src/renderer/src/components/worker'),
   '@store': path.resolve(__dirname, 'src/renderer/src/store'),
   '@utils': path.resolve(__dirname, 'src/renderer/src/utils'),
-  '@audio': path.resolve(__dirname, 'src/main/audio'),
-  stream: 'stream-browserify',
-  Buffer: 'buffer'
+  '@shared': path.resolve(__dirname, 'src/main/shared')
 }
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin({})],
     build: {
       outDir: 'out/main',
+      externalizeDeps: true,
       rollupOptions: {
+        external: ['electron', 'usb', 'node-gyp-build'],
         input: {
           main: resolve(__dirname, 'src/main/index.ts'),
           usbWorker: resolve(__dirname, 'src/main/services/usb/USBWorker.ts')
         },
-        output: { entryFileNames: '[name].js' }
+        output: {
+          format: 'cjs',
+          entryFileNames: '[name].js'
+        }
       }
     },
     resolve: { alias }
   },
 
   preload: {
-    plugins: [externalizeDepsPlugin({})],
-    build: { outDir: 'out/preload' },
+    build: {
+      outDir: 'out/preload',
+      externalizeDeps: true,
+      rollupOptions: {
+        external: ['electron']
+      }
+    },
     resolve: { alias }
   },
 
@@ -64,7 +76,7 @@ export default defineConfig({
         }
       }
     },
-    resolve: { alias },
+    resolve: { alias: rendererAlias },
     plugins: [react({})],
     server: {
       headers: {

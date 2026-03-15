@@ -1,5 +1,5 @@
 import { SettingsNode, ValueTransform } from '../types'
-import { ExtraConfig } from '../../../../main/Globals'
+import type { ExtraConfig } from '@shared/types'
 import {
   MEDIA_DELAY_MIN,
   MEDIA_DELAY_MAX,
@@ -159,6 +159,14 @@ export const audioSchema: SettingsNode<ExtraConfig> = {
         labelDescription: 'settings.callQualityDescription'
       }
     },
+    // Currently disabled
+    /*
+    {
+      type: 'checkbox',
+      label: 'Play on Connect',
+      labelKey: 'settings.playOnConnect',
+      path: 'autoPlay'
+    },*/
     {
       type: 'checkbox',
       label: 'Disable Audio',

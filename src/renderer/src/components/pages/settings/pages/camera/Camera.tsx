@@ -1,5 +1,5 @@
 import type { SettingsCustomPageProps } from '../../type'
-import type { ExtraConfig } from '@main/Globals'
+import type { ExtraConfig } from '@shared/types'
 import { updateCameras as detectCameras } from '@utils/cameraDetection'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useStatusStore } from '@store/store'
@@ -41,8 +41,8 @@ export const Camera: React.FC<SettingsCustomPageProps<ExtraConfig, string>> = ({
         detectCameras(setCameraFound, safeCameraPersist, state).then(setCameras)
       }
     }
-    window.carplay.usb.listenForEvents(usbHandler)
-    return () => window.carplay.usb.unlistenForEvents(usbHandler)
+    window.projection.usb.listenForEvents(usbHandler)
+    return () => window.projection.usb.unlistenForEvents(usbHandler)
   }, [safeCameraPersist, setCameraFound, state])
 
   const cameraOptions = useMemo<readonly { deviceId: string; label: string }[]>(

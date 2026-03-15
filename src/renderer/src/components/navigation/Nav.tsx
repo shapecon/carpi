@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router'
 import Tabs from '@mui/material/Tabs'
 import Tab from '@mui/material/Tab'
 import { useStatusStore } from '../../store/store'
-import { ExtraConfig } from '../../../../main/Globals'
+import type { ExtraConfig } from '@shared/types'
 import { useTabsConfig } from './useTabsConfig'
 import { ROUTES, UI } from '../../constants'
 import { useBlinkingTime } from '../../hooks/useBlinkingTime'
@@ -41,7 +41,7 @@ export const Nav = ({ receivingVideo }: NavProps) => {
     const tab = tabs[newIndex]
 
     if (tab.path === ROUTES.QUIT) {
-      window.carplay.quit().catch(console.error)
+      window.projection.quit().catch(console.error)
       return
     }
 
@@ -106,7 +106,7 @@ export const Nav = ({ receivingVideo }: NavProps) => {
               return
             }
             if (tab.path === ROUTES.QUIT) {
-              window.carplay.quit().catch(console.error)
+              window.projection.quit().catch(console.error)
               return
             }
             navigate(tab.path)
