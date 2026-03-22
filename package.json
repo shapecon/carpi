@@ -1,6 +1,6 @@
 {
   "name": "carpi",
-  "version": "5.6.0",
+  "version": "5.6.1",
   "description": "LIVI - Linux In-Vehicle Infotainment",
   "main": "./out/main/main.js",
   "author": "Lasse Heitgres",
