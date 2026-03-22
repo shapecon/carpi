@@ -1,5 +1,11 @@
 {
   "permissions": {
-    "allow": ["Bash(npx tsc:*)", "Bash(git remote:*)"]
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(git remote:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
+    ]
   }
 }
