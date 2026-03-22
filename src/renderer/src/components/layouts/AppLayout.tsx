@@ -118,6 +118,8 @@ export const AppLayout: FC<PropsWithChildren<AppLayoutProps>> = ({
     window.app?.notifyUserActivity?.()
   }, [])
 
+  const appTouchAction = pathname.startsWith(ROUTES.SETTINGS) ? 'pan-y' : 'none'
+
   return (
     <div
       id="main"
@@ -125,7 +127,7 @@ export const AppLayout: FC<PropsWithChildren<AppLayoutProps>> = ({
       onPointerDownCapture={onUserActivity}
       style={{
         height: '100dvh',
-        touchAction: 'none',
+        touchAction: appTouchAction,
         display: 'flex',
         position: 'relative',
         flexDirection: isRoundDisplay ? 'column' : layoutDirection,

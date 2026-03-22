@@ -10,6 +10,7 @@ import { createProjectionWorker } from '@worker/createProjectionWorker'
 import { createRenderWorker } from '@worker/createRenderWorker'
 import type { ProjectionWorker, UsbEvent, KeyCommand, WorkerToUI } from '@worker/types'
 import { useCarplayMultiTouch } from './hooks/useCarplayTouch'
+import { useRoundLayoutMetrics } from '@renderer/hooks'
 
 // Icons
 import CropPortraitOutlinedIcon from '@mui/icons-material/CropPortraitOutlined'
@@ -97,6 +98,7 @@ const CarplayComponent: React.FC<CarplayProps> = ({
   }, [pathname])
 
   const theme = useTheme()
+  const { isRoundDisplay, circleSize } = useRoundLayoutMetrics()
 
   // Zustand store
   const isStreaming = useStatusStore((s) => s.isStreaming)
@@ -940,6 +942,27 @@ const CarplayComponent: React.FC<CarplayProps> = ({
   const resolvedNegotiatedWidth = negotiatedWidth ?? 0
   const resolvedNegotiatedHeight = negotiatedHeight ?? 0
 
+  const projectionAspect =
+    resolvedNegotiatedWidth > 0 && resolvedNegotiatedHeight > 0
+      ? resolvedNegotiatedWidth / resolvedNegotiatedHeight
+      : settings.width > 0 && settings.height > 0
+        ? settings.width / settings.height
+        : 16 / 9
+
+  const roundViewportSize = (() => {
+    if (!isRoundDisplay) return null
+
+    const usableDiameter = Math.max(0, Math.round(circleSize * 0.94))
+    const safeAspect = projectionAspect > 0 ? projectionAspect : 16 / 9
+    const height = Math.floor(usableDiameter / Math.sqrt(safeAspect * safeAspect + 1))
+    const width = Math.floor(height * safeAspect)
+
+    return {
+      width: Math.max(220, width),
+      height: Math.max(140, height)
+    }
+  })()
+
   const viewportWidth = viewportSize.width
   const viewportHeight = viewportSize.height
 
@@ -1010,7 +1033,6 @@ const CarplayComponent: React.FC<CarplayProps> = ({
   return (
     <div
       id="projection-root"
-      ref={mainElem}
       style={{
         position: 'fixed',
         inset: 0,
@@ -1036,41 +1058,65 @@ const CarplayComponent: React.FC<CarplayProps> = ({
       )}
 
       <div
-        id="videoContainer"
-        ref={videoContainerRef}
-        {...touchHandlers}
         style={{
-          height: '100%',
-          width: '100%',
-          padding: 0,
-          margin: 0,
-          display: 'block',
-          touchAction: 'none',
-          backgroundColor:
-            receivingVideo && !rendererError ? '#000' : theme.palette.background.default,
-          visibility: receivingVideo && !rendererError ? 'visible' : 'hidden',
-          zIndex: receivingVideo && !rendererError ? 1 : -1,
-          position: 'relative',
-          overflow: 'hidden'
+          position: 'absolute',
+          left: '50%',
+          top: '50%',
+          width: roundViewportSize ? `${roundViewportSize.width}px` : '100%',
+          height: roundViewportSize ? `${roundViewportSize.height}px` : '100%',
+          transform: 'translate(-50%, -50%)',
+          overflow: 'hidden',
+          borderRadius: roundViewportSize ? '18px' : 0,
+          backgroundColor: theme.palette.background.default,
+          boxShadow: roundViewportSize ? '0 10px 28px rgba(0,0,0,0.34)' : 'none'
         }}
       >
-        <canvas
-          ref={canvasRef}
-          id="video"
+        <div
+          ref={mainElem}
           style={{
-            width: receivingVideo && !rendererError ? canvasCssWidth : '0px',
-            height: receivingVideo && !rendererError ? canvasCssHeight : '0px',
-            position: 'absolute',
-            left: receivingVideo && !rendererError ? canvasCssLeft : '0px',
-            top: receivingVideo && !rendererError ? canvasCssTop : '0px',
-            maxWidth: 'none',
-            maxHeight: 'none',
-            touchAction: 'none',
-            userSelect: 'none',
-            pointerEvents: 'none',
-            display: 'block'
+            width: '100%',
+            height: '100%',
+            position: 'relative'
           }}
-        />
+        >
+          <div
+            id="videoContainer"
+            ref={videoContainerRef}
+            {...touchHandlers}
+            style={{
+              height: '100%',
+              width: '100%',
+              padding: 0,
+              margin: 0,
+              display: 'block',
+              touchAction: 'none',
+              backgroundColor:
+                receivingVideo && !rendererError ? '#000' : theme.palette.background.default,
+              visibility: receivingVideo && !rendererError ? 'visible' : 'hidden',
+              zIndex: receivingVideo && !rendererError ? 1 : -1,
+              position: 'relative',
+              overflow: 'hidden'
+            }}
+          >
+            <canvas
+              ref={canvasRef}
+              id="video"
+              style={{
+                width: receivingVideo && !rendererError ? canvasCssWidth : '0px',
+                height: receivingVideo && !rendererError ? canvasCssHeight : '0px',
+                position: 'absolute',
+                left: receivingVideo && !rendererError ? canvasCssLeft : '0px',
+                top: receivingVideo && !rendererError ? canvasCssTop : '0px',
+                maxWidth: 'none',
+                maxHeight: 'none',
+                touchAction: 'none',
+                userSelect: 'none',
+                pointerEvents: 'none',
+                display: 'block'
+              }}
+            />
+          </div>
+        </div>
       </div>
     </div>
   )
