@@ -3,108 +3,100 @@ name: release
 on:
   workflow_dispatch:
     inputs:
-      build_run_id:
-        description: 'ID of successful build run (leave empty = latest on main)'
-        required: false
-      draft:
-        description: 'Create as draft?'
-        type: boolean
-        default: true
+      bump:
+        description: 'Version bump type'
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
 
 jobs:
-  create_release:
+  release:
     runs-on: ubuntu-latest
-    permissions: { contents: write, actions: read }
+    permissions:
+      contents: write
 
     steps:
-      - name: Pick build run ID
-        id: pick
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-        run: |
-          if [[ -z "${{ github.event.inputs.build_run_id }}" ]]; then
-            RUN=$(gh run list --repo "$REPO" \
-                               --workflow build.yml \
-                               -b main \
-                               -s success \
-                               -L 1 \
-                               --json databaseId \
-                               -q '.[0].databaseId')
-          else
-            RUN="${{ github.event.inputs.build_run_id }}"
-          fi
-          if [[ -z "$RUN" ]]; then
-            echo "::error::No suitable build run found."
-            exit 1
-          fi
-          echo "run_id=$RUN" >> "$GITHUB_OUTPUT"
-
-      - name: Get commit SHA
-        id: sha
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-        run: |
-          SHA=$(gh run view "${{ steps.pick.outputs.run_id }}" \
-                 --repo "$REPO" \
-                 --json headSha \
-                 -q .headSha)
-          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-
       - uses: actions/checkout@v4
         with:
-          ref: ${{ steps.sha.outputs.sha }}
-          fetch-depth: 1
+          token: ${{ secrets.GH_TOKEN }}
+          fetch-depth: 0
 
-      - name: Read version
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Bump version
         id: ver
         run: |
-          VERSION=$(grep -oP '"version"\s*:\s*"\K[^"]+' package.json)
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          NEW_VERSION=$(npm version ${{ inputs.bump }} --no-git-tag-version | tr -d 'v')
+          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          git add package.json
+          git commit -m "chore: release v${NEW_VERSION}"
+          git tag "v${NEW_VERSION}"
+          git push origin main --tags
 
-      - name: Get release date (Europe/Berlin)
-        id: rel_date
+      - name: Install build deps
         run: |
-          echo "date=$(TZ=Europe/Berlin date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            git build-essential python3 python3-dev \
+            libusb-1.0-0-dev libudev-dev pkg-config \
+            libusb-1.0-0 libudev1 ca-certificates
+          docker run --privileged --rm tonistiigi/binfmt --install arm64 >/dev/null
 
-      - name: Ensure release tag does not already exist
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build arm64 AppImage (emulated)
         run: |
-          VERSION="${{ steps.ver.outputs.version }}"
-          TAG="v${VERSION}"
+          mkdir -p .pnpm-store .cache/electron .cache/electron-builder
+          chmod -R a+rwx .pnpm-store .cache || true
 
-          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
-            echo "::error::Release with tag $TAG already exists.."
-            exit 1
-          fi
+          docker run --rm --platform=linux/arm64/v8 \
+            -v "${GITHUB_WORKSPACE}:/work" \
+            -w /work \
+            -e HUSKY=0 \
+            -e PNPM_NODE_LINKER=hoisted \
+            -e PNPM_SHAMEFULLY_HOIST=true \
+            -e ELECTRON_CACHE=/work/.cache/electron \
+            -e ELECTRON_BUILDER_CACHE=/work/.cache/electron-builder \
+            node:24-trixie-slim bash -lc '
+              set -euo pipefail
+              apt-get update
+              apt-get install -y --no-install-recommends \
+                git build-essential python3 python3-dev \
+                libusb-1.0-0-dev libudev-dev pkg-config \
+                libusb-1.0-0 libudev1 ca-certificates liblzo2-2
+              rm -rf /var/lib/apt/lists/*
+              corepack enable && corepack install
+              pnpm config set store-dir /work/.pnpm-store
+              pnpm install --frozen-lockfile
+              ELECTRON_VERSION="$(node -p "require(\"./node_modules/electron/package.json\").version")"
+              npx --yes node-gyp install --target="$ELECTRON_VERSION" --dist-url=https://artifacts.electronjs.org/headers/dist
+              pnpm run build:armLinux
+            '
 
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          run-id: ${{ steps.pick.outputs.run_id }}
-          path: release-assets
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Fix permissions
+        run: sudo chown -R "$USER:$USER" dist .cache .pnpm-store 2>/dev/null || true
 
-      - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          draft: ${{ github.event.inputs.draft }}
-          tag_name: v${{ steps.ver.outputs.version }}
-          name: v${{ steps.ver.outputs.version }} (${{ steps.rel_date.outputs.date }})
-          body: |
-            ## Release Notes – v${{ steps.ver.outputs.version }}
-
-            ### Fix
-
-            ### Improvements
-
-            ### Feature
-
-            ### Chores
-
-          files: release-assets/**/*
+      - name: Publish release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DATE=$(TZ=Europe/Berlin date +'%Y-%m-%d')
+          VERSION="${{ steps.ver.outputs.version }}"
+          gh release create "v${VERSION}" dist/*.AppImage \
+            --title "v${VERSION} (${DATE})" \
+            --notes "## Release Notes – v${VERSION}" \
+            --repo "${{ github.repository }}"
