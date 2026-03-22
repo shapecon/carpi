@@ -46,7 +46,7 @@ describe('useTabsConfig', () => {
 
   test('returns base tabs by default', () => {
     const { result } = renderHook(() => useTabsConfig(false))
-    expect(result.current.map((t) => t.path)).toEqual(['/', '/media', '/camera', '/settings'])
+    expect(result.current.map((t) => t.path)).toEqual(['/', '/media', '/settings'])
   })
 
   test('adds maps and telemetry tabs when enabled', () => {
@@ -56,17 +56,9 @@ describe('useTabsConfig', () => {
     expect(result.current.map((t) => t.path)).toEqual([
       '/',
       '/maps',
-      '/telemetry',
       '/media',
-      '/camera',
+      '/telemetry',
       '/settings'
     ])
-  })
-
-  test('disables camera tab when camera is not found', () => {
-    mockState.cameraFound = false
-    const { result } = renderHook(() => useTabsConfig(false))
-    const camera = result.current.find((t) => t.path === '/camera')
-    expect(camera?.disabled).toBe(true)
   })
 })

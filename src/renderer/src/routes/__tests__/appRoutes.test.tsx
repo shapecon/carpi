@@ -1,5 +1,6 @@
 jest.mock('../../components/pages', () => ({
   Home: () => null,
+  Clock: () => null,
   Media: () => null,
   Camera: () => null,
   Maps: () => null,
@@ -21,6 +22,14 @@ describe('appRoutes', () => {
   test('contains expected top-level app routes', () => {
     const root = appRoutes[0]
     const paths = (root.children ?? []).map((r: any) => r.path)
-    expect(paths).toEqual(['/home', '/telemetry', '/maps', '/media', '/camera', '/settings/*'])
+    expect(paths).toEqual([
+      '/home',
+      '/clock',
+      '/telemetry',
+      '/maps',
+      '/media',
+      '/camera',
+      '/settings/*'
+    ])
   })
 })
