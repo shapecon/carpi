@@ -131,9 +131,11 @@ export const AppLayout: FC<PropsWithChildren<AppLayoutProps>> = ({
         flexDirection: isRoundDisplay ? 'column' : layoutDirection,
         ...(isRoundDisplay
           ? {
-              width: '100dvh',
-              maxWidth: '100dvw',
-              margin: '0 auto',
+              left: '50%',
+              top: '50%',
+              width: 'min(100dvw, 100dvh)',
+              height: 'min(100dvw, 100dvh)',
+              transform: 'translate(-50%, -50%)',
               borderRadius: '50%',
               overflow: 'hidden'
             }

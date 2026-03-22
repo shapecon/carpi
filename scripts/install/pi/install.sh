@@ -67,15 +67,27 @@ if [ -z "$latest_url" ]; then
 fi
 
 echo "   Download URL: $latest_url"
-if ! curl -L "$latest_url" --output "$APPIMAGE_PATH"; then
+TMP_APPIMAGE_PATH="$(mktemp "$APPIMAGE_DIR/.carpi.AppImage.tmp.XXXXXX")"
+
+cleanup_tmp_appimage() {
+  rm -f "$TMP_APPIMAGE_PATH"
+}
+
+trap cleanup_tmp_appimage EXIT
+
+if ! curl -L "$latest_url" --output "$TMP_APPIMAGE_PATH"; then
   echo "Error: Download failed" >&2
   exit 1
 fi
-echo "   Download complete: $APPIMAGE_PATH"
+echo "   Download complete: $TMP_APPIMAGE_PATH"
 
 # Mark AppImage as executable
 echo "→ Setting executable flag"
-chmod +x "$APPIMAGE_PATH"
+chmod +x "$TMP_APPIMAGE_PATH"
+
+echo "→ Replacing AppImage"
+mv -f "$TMP_APPIMAGE_PATH" "$APPIMAGE_PATH"
+trap - EXIT
 
 # Create per-user autostart entry
 echo "→ Creating autostart entry"
