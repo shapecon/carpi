@@ -42,7 +42,7 @@ export function registerSettingsIpc(runtimeState: runtimeStateProps) {
 
   registerIpcHandle('app:getLatestRelease', async () => {
     try {
-      const repo = process.env.UPDATE_REPO || 'f-io/LIVI'
+      const repo = process.env.UPDATE_REPO || 'shapecon/carpi'
       const feed = process.env.UPDATE_FEED || `https://api.github.com/repos/${repo}/releases/latest`
       const res = await fetch(feed, { headers: { 'User-Agent': 'LIVI-updater' } })
       if (!res.ok) throw new Error(`feed ${res.status}`)
