@@ -41,10 +41,10 @@ export const SettingsLayout = ({
     const pt = isRoundDisplay ? circularInset : clampPx(8, 2.2 * vh, 18)
     const pb = isRoundDisplay ? circularInset : clampPx(10, 2.2 * vh, 18)
 
-    const headerH = clampPx(32, 5.5 * vh, 44)
-    const slotLeftW = clampPx(36, 6 * vw, 56)
+    const headerH = clampPx(40, 5.5 * vh, 52)
+    const slotLeftW = isRoundDisplay ? clampPx(52, 8 * vw, 72) : clampPx(36, 6 * vw, 56)
     const slotRightW = clampPx(36, 8 * vw, 100)
-    const iconPx = clampPx(18, 3.2 * vh, 28)
+    const iconPx = isRoundDisplay ? clampPx(28, 4 * vh, 38) : clampPx(18, 3.2 * vh, 28)
     const titlePx = clampPx(16, 3.6 * vh, 34)
     const applyPx = clampPx(13, 1.8 * vh, 16)
 
@@ -89,7 +89,7 @@ export const SettingsLayout = ({
             height: '100%',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'flex-start'
+            justifyContent: isRoundDisplay ? 'center' : 'flex-start'
           }}
         >
           {showBack ? (

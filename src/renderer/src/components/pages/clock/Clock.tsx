@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useRoundLayoutMetrics } from '@renderer/hooks'
 
 const CX = 100
 const CY = 100
@@ -53,29 +52,24 @@ function Hand({
 
 export const Clock = () => {
   const [angles, setAngles] = useState(getAngles)
-  const { isRoundDisplay } = useRoundLayoutMetrics()
 
   useEffect(() => {
     const id = setInterval(() => setAngles(getAngles()), 100)
     return () => clearInterval(id)
   }, [])
 
-  const svgSize = isRoundDisplay ? '86%' : '84%'
-
   return (
     <div
       style={{
         width: '100%',
         height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#000'
+        background: '#000',
+        boxSizing: 'border-box'
       }}
     >
       <svg
         viewBox="0 0 200 200"
-        style={{ width: svgSize, height: svgSize }}
+        style={{ width: '100%', height: '100%', display: 'block' }}
         aria-label="Analog clock"
       >
         <defs>

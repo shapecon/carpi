@@ -30,7 +30,13 @@ describe('loadConfig', () => {
 
     const result = loadConfig()
 
-    expect(result).toEqual({ width: 800, height: 480, kiosk: true, bindings: {} })
+    expect(result).toEqual({
+      width: 800,
+      height: 800,
+      kiosk: true,
+      bindings: {},
+      displayMode: 'round'
+    })
     expect(writeFileSync).toHaveBeenCalledWith('/tmp/config.json', JSON.stringify(result, null, 2))
   })
 
@@ -43,8 +49,14 @@ describe('loadConfig', () => {
     const result = loadConfig()
 
     expect(readFileSync).toHaveBeenCalledWith('/tmp/config.json', 'utf8')
-    expect(result).toEqual({ width: 1024, height: 600, kiosk: false, bindings: {} })
-    expect(writeFileSync).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      width: 1024,
+      height: 1024,
+      kiosk: false,
+      bindings: {},
+      displayMode: 'round'
+    })
+    expect(writeFileSync).toHaveBeenCalled()
   })
 
   test('falls back to defaults and rewrites file when json is invalid', () => {
@@ -55,7 +67,13 @@ describe('loadConfig', () => {
 
     const result = loadConfig()
 
-    expect(result).toEqual({ width: 800, height: 480, kiosk: true, bindings: {} })
+    expect(result).toEqual({
+      width: 800,
+      height: 800,
+      kiosk: true,
+      bindings: {},
+      displayMode: 'round'
+    })
     expect(warnSpy).toHaveBeenCalled()
     expect(writeFileSync).toHaveBeenCalledWith('/tmp/config.json', JSON.stringify(result, null, 2))
 

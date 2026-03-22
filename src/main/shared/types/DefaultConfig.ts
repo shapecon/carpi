@@ -4,7 +4,7 @@ import { ICON_120_B64, ICON_180_B64, ICON_256_B64 } from '@shared/assets/carIcon
 import { HandDriveType, MicType, PhoneWorkMode } from '@shared/types/DongleConfig'
 
 export const DEFAULT_EXTRA_CONFIG: ExtraConfig = {
-  width: 800,
+  width: 480,
   height: 480,
   fps: 60,
   lastPhoneWorkMode: PhoneWorkMode.CarPlay,
@@ -30,9 +30,9 @@ export const DEFAULT_EXTRA_CONFIG: ExtraConfig = {
   wifiChannel: 36,
   micType: MicType.CarMic,
   phoneConfig: {},
-  startPage: 'home',
+  startPage: 'clock',
   language: 'en',
-  displayMode: 'standard',
+  displayMode: 'round',
   kiosk: true,
   uiZoomPercent: 100,
   camera: '',

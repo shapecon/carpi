@@ -46,7 +46,7 @@ describe('useTabsConfig', () => {
 
   test('returns base tabs by default', () => {
     const { result } = renderHook(() => useTabsConfig(false))
-    expect(result.current.map((t) => t.path)).toEqual(['/', '/media', '/settings'])
+    expect(result.current.map((t) => t.path)).toEqual(['/', '/clock', '/media', '/settings'])
   })
 
   test('adds maps and telemetry tabs when enabled', () => {
@@ -56,6 +56,7 @@ describe('useTabsConfig', () => {
     expect(result.current.map((t) => t.path)).toEqual([
       '/',
       '/maps',
+      '/clock',
       '/media',
       '/telemetry',
       '/settings'

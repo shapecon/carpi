@@ -14,6 +14,7 @@ import i18n from 'i18next'
 
 const START_PAGE_ROUTE: Record<string, string> = {
   home: ROUTES.HOME,
+  clock: ROUTES.CLOCK,
   media: ROUTES.MEDIA,
   maps: ROUTES.MAPS,
   camera: ROUTES.CAMERA,

@@ -9,6 +9,7 @@ import PlayCircleOutlinedIcon from '@mui/icons-material/PlayCircleOutlined'
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
 import MapOutlinedIcon from '@mui/icons-material/MapOutlined'
 import SpeedOutlinedIcon from '@mui/icons-material/SpeedOutlined'
+import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined'
 
 export const useTabsConfig: (receivingVideo: boolean) => TabConfig[] = (receivingVideo) => {
   const theme = useTheme()
@@ -54,6 +55,7 @@ export const useTabsConfig: (receivingVideo: boolean) => TabConfig[] = (receivin
           }
         ]
       : []),
+    { label: 'Clock', path: ROUTES.CLOCK, icon: <ScheduleOutlinedIcon sx={{ fontSize: 30 }} /> },
     { label: 'Media', path: ROUTES.MEDIA, icon: <PlayCircleOutlinedIcon sx={{ fontSize: 30 }} /> },
     ...(telemetryEnabled
       ? [

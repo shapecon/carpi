@@ -17,6 +17,9 @@ export function loadConfig(): ExtraConfig {
 
   const merged = validate(fileConfig, DEFAULT_EXTRA_CONFIG)
 
+  // Always use round display mode
+  merged.displayMode = 'round'
+
   // Round display mode forces square resolution
   if (merged.displayMode === 'round' && merged.width !== merged.height) {
     const size = Math.max(merged.width, merged.height)
