@@ -54,6 +54,7 @@ jobs:
           docker run --rm --platform=linux/arm64/v8 \
             -v "${GITHUB_WORKSPACE}:/work" \
             -w /work \
+            -e CI=true \
             -e HUSKY=0 \
             -e PNPM_NODE_LINKER=hoisted \
             -e PNPM_SHAMEFULLY_HOIST=true \
