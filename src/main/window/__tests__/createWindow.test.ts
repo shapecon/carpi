@@ -54,6 +54,7 @@ jest.mock('@main/utils', () => ({
 jest.mock('@main/window/utils', () => ({
   applyAspectRatioFullscreen: jest.fn(),
   applyAspectRatioWindowed: jest.fn(),
+  applyFixedWindowContentSize: jest.fn(),
   applyWindowedContentSize: jest.fn(),
   attachKioskStateSync: jest.fn(),
   currentKiosk: jest.fn(() => false),
@@ -78,6 +79,9 @@ describe('createMainWindow', () => {
 
     const win = browserWindowInstances[0]
     expect(win).toBeDefined()
+    expect(win.__opts.width).toBe(480)
+    expect(win.__opts.height).toBe(480)
+    expect(win.__opts.resizable).toBe(false)
     expect(win.loadURL).toHaveBeenCalledWith('app://index.html')
 
     expect(getMainWindow()).toBe(win)

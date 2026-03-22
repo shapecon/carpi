@@ -7,7 +7,8 @@ export const DashboardsPagination: FC<DashboardsPaginationProps> = ({
   activeIndex,
   dotsLength,
   onSetIndex,
-  isNavbarHidden
+  isNavbarHidden,
+  bottomOffset
 }) => {
   const theme = useTheme()
 
@@ -19,7 +20,7 @@ export const DashboardsPagination: FC<DashboardsPaginationProps> = ({
         position: 'absolute',
         left: 0,
         right: 0,
-        bottom: 'clamp(10px, 2.2svh, 18px)',
+        bottom: bottomOffset != null ? `${bottomOffset}px` : 'clamp(10px, 2.2svh, 18px)',
         display: 'flex',
         justifyContent: 'center',
         pointerEvents: 'auto',

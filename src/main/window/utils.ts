@@ -1,4 +1,4 @@
-import { MIN_HEIGHT, MIN_WIDTH } from '@main/constants'
+import { FIXED_WINDOW_SIZE, MIN_HEIGHT, MIN_WIDTH } from '@main/constants'
 import { isMacPlatform, pushSettingsToRenderer } from '@main/utils'
 import { BrowserWindow, screen } from 'electron'
 import type { ExtraConfig } from '@shared/types'
@@ -49,6 +49,21 @@ export function applyWindowedContentSize(win: BrowserWindow, w: number, h: numbe
   // non-Linux
   win.setContentSize(w, h, false)
   applyAspectRatioWindowed(win, w, h)
+}
+
+export function applyFixedWindowContentSize(win: BrowserWindow, size: number = FIXED_WINDOW_SIZE) {
+  const target = Math.max(1, Math.round(size))
+
+  win.setResizable(true)
+  win.setMinimumSize(0, 0)
+  win.setMaximumSize(0, 0)
+  win.setAspectRatio(0)
+  win.setContentSize(target, target, false)
+
+  const [winW, winH] = win.getSize()
+  win.setMinimumSize(winW, winH)
+  win.setMaximumSize(winW, winH)
+  win.setResizable(false)
 }
 
 export function currentKiosk(config: ExtraConfig): boolean {

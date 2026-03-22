@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import IconButton from '@mui/material/IconButton'
@@ -8,8 +8,7 @@ import RestartAltOutlinedIcon from '@mui/icons-material/RestartAltOutlined'
 import { useLocation, useNavigate } from 'react-router'
 import { SettingsLayoutProps } from './types'
 import { useTheme } from '@mui/material/styles'
-
-type Vp = { w: number; h: number }
+import { useRoundLayoutMetrics } from '@renderer/hooks'
 
 const clampPx = (min: number, pref: number, max: number) => Math.max(min, Math.min(pref, max))
 
@@ -22,6 +21,7 @@ export const SettingsLayout = ({
   const navigate = useNavigate()
   const theme = useTheme()
   const location = useLocation()
+  const { viewport, isRoundDisplay, circularInset, safeDiameter } = useRoundLayoutMetrics()
 
   //const handleNavigate = () => navigate(-1)
   const handleNavigate = () => {
@@ -32,42 +32,14 @@ export const SettingsLayout = ({
 
   const showBack = location.pathname !== '/settings'
 
-  const [vp, setVp] = useState<Vp>(() => {
-    const vv = window.visualViewport
-    return {
-      w: Math.round(vv?.width ?? window.innerWidth),
-      h: Math.round(vv?.height ?? window.innerHeight)
-    }
-  })
-
-  useLayoutEffect(() => {
-    const vv = window.visualViewport
-
-    const update = () => {
-      setVp({
-        w: Math.round(vv?.width ?? window.innerWidth),
-        h: Math.round(vv?.height ?? window.innerHeight)
-      })
-    }
-
-    update()
-    window.addEventListener('resize', update)
-    vv?.addEventListener('resize', update)
-
-    return () => {
-      window.removeEventListener('resize', update)
-      vv?.removeEventListener('resize', update)
-    }
-  }, [])
-
   const px = useMemo(() => {
-    const vw = vp.w / 100
-    const vh = vp.h / 100
+    const vw = viewport.w / 100
+    const vh = viewport.h / 100
 
-    const pl = clampPx(12, 1.5 * vw, 28)
-    const pr = clampPx(12, 3.5 * vw, 28)
-    const pt = clampPx(8, 2.2 * vh, 18)
-    const pb = clampPx(10, 2.2 * vh, 18)
+    const pl = isRoundDisplay ? circularInset : clampPx(12, 1.5 * vw, 28)
+    const pr = isRoundDisplay ? circularInset : clampPx(12, 3.5 * vw, 28)
+    const pt = isRoundDisplay ? circularInset : clampPx(8, 2.2 * vh, 18)
+    const pb = isRoundDisplay ? circularInset : clampPx(10, 2.2 * vh, 18)
 
     const headerH = clampPx(32, 5.5 * vh, 44)
     const slotLeftW = clampPx(36, 6 * vw, 56)
@@ -76,8 +48,12 @@ export const SettingsLayout = ({
     const titlePx = clampPx(16, 3.6 * vh, 34)
     const applyPx = clampPx(13, 1.8 * vh, 16)
 
-    return { pl, pr, pt, pb, headerH, slotLeftW, slotRightW, iconPx, titlePx, applyPx }
-  }, [vp.h, vp.w])
+    const contentMaxW = isRoundDisplay
+      ? Math.min(Math.max(250, Math.round(safeDiameter * 0.84)), 372)
+      : Number.POSITIVE_INFINITY
+
+    return { pl, pr, pt, pb, headerH, slotLeftW, slotRightW, iconPx, titlePx, applyPx, contentMaxW }
+  }, [viewport.h, viewport.w, isRoundDisplay, circularInset, safeDiameter])
 
   return (
     <Box
@@ -218,10 +194,20 @@ export const SettingsLayout = ({
           overflowX: 'hidden',
           scrollbarGutter: 'stable',
           WebkitOverflowScrolling: 'touch',
-          touchAction: 'pan-y'
+          touchAction: 'pan-y',
+          display: 'flex',
+          justifyContent: 'center'
         }}
       >
-        <Stack spacing={0} sx={{ minHeight: '100%', padding: '0 0 0 0.5rem' }}>
+        <Stack
+          spacing={isRoundDisplay ? 1 : 0}
+          sx={{
+            width: '100%',
+            maxWidth: Number.isFinite(px.contentMaxW) ? `${px.contentMaxW}px` : '100%',
+            minHeight: '100%',
+            padding: 0
+          }}
+        >
           {children}
         </Stack>
       </Box>

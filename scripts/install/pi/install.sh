@@ -40,7 +40,7 @@ sudo udevadm control --reload-rules
 sudo udevadm trigger
 
 # ICON INSTALLATION
-ICON_URL="https://raw.githubusercontent.com/f-io/LIVI/main/assets/icons/linux/livi.png"
+ICON_URL="https://raw.githubusercontent.com/shapecon/carpi/main/assets/icons/linux/livi.png"
 ICON_DEST="$USER_HOME/.local/share/icons/livi.png"
 
 echo "→ Installing icon to $ICON_DEST"
@@ -56,7 +56,7 @@ fi
 
 # Fetch latest ARM64 AppImage from GitHub
 echo "→ Fetching latest LIVI release"
-latest_url=$(curl -s https://api.github.com/repos/f-io/LIVI/releases/latest \
+latest_url=$(curl -s https://api.github.com/repos/shapecon/carpi/releases/latest \
   | grep "browser_download_url" \
   | grep "arm64.AppImage" \
   | cut -d '"' -f 4)

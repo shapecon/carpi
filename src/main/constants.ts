@@ -6,6 +6,7 @@ export const MIN_WIDTH = 300
 export const MIN_HEIGHT = 200
 export const DEFAULT_WIDTH = 800
 export const DEFAULT_HEIGHT = 480
+export const FIXED_WINDOW_SIZE = 480
 
 export const NULL_DELETES: (keyof ExtraConfig)[] = [
   'primaryColorDark',

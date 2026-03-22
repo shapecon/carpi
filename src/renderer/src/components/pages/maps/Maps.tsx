@@ -4,6 +4,7 @@ import { Box, Typography, useTheme } from '@mui/material'
 import { InitEvent } from '@worker/render/RenderEvents'
 import { useStatusStore, useLiviStore } from '../../../store/store'
 import MapOutlinedIcon from '@mui/icons-material/MapOutlined'
+import { useRoundLayoutMetrics } from '@renderer/hooks'
 
 type BoxInfo = { supportFeatures?: unknown }
 
@@ -30,6 +31,7 @@ function parseBoxInfo(raw: unknown): BoxInfo | null {
 
 export const Maps: React.FC = () => {
   const theme = useTheme()
+  const { isRoundDisplay, sideInset, topInset, safeDiameter } = useRoundLayoutMetrics()
 
   const settings = useLiviStore((s) => s.settings)
   const boxInfoRaw = useLiviStore((s) => s.boxInfo)
@@ -233,6 +235,37 @@ export const Maps: React.FC = () => {
         backgroundColor: theme.palette.background.default
       }}
     >
+      {isRoundDisplay && (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: `${Math.max(12, topInset - 18)}px`,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            px: 1.5,
+            py: 0.7,
+            borderRadius: 999,
+            backgroundColor:
+              theme.palette.mode === 'dark' ? 'rgba(4,7,10,0.58)' : 'rgba(255,255,255,0.82)',
+            border: `1px solid ${theme.palette.divider}`,
+            backdropFilter: 'blur(10px)',
+            pointerEvents: 'none'
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              color: theme.palette.text.secondary
+            }}
+          >
+            Cluster Maps
+          </Typography>
+        </Box>
+      )}
+
       {!isStreaming && (
         <Box
           sx={{
@@ -244,7 +277,27 @@ export const Maps: React.FC = () => {
             pointerEvents: 'none'
           }}
         >
-          <MapOutlinedIcon sx={{ fontSize: 84, opacity: 0.55 }} />
+          <Box
+            sx={{
+              width: isRoundDisplay
+                ? `${Math.max(180, Math.round(safeDiameter * 0.56))}px`
+                : 'auto',
+              px: 3,
+              py: 2.5,
+              borderRadius: isRoundDisplay ? 6 : 0,
+              backgroundColor: isRoundDisplay ? 'rgba(0,0,0,0.28)' : 'transparent',
+              backdropFilter: isRoundDisplay ? 'blur(10px)' : 'none',
+              display: 'grid',
+              gap: 1,
+              placeItems: 'center'
+            }}
+          >
+            <MapOutlinedIcon sx={{ fontSize: 84, opacity: 0.55 }} />
+            <Typography sx={{ fontSize: '1rem', fontWeight: 700 }}>No cluster stream</Typography>
+            <Typography variant="body2" sx={{ opacity: 0.72, maxWidth: 220 }}>
+              Navigation guidance appears here when the dongle provides a secondary map feed.
+            </Typography>
+          </Box>
         </Box>
       )}
 
@@ -299,7 +352,14 @@ export const Maps: React.FC = () => {
       )}
 
       {rendererError && (
-        <Box sx={{ position: 'absolute', top: 16, left: 16, right: 16 }}>
+        <Box
+          sx={{
+            position: 'absolute',
+            top: isRoundDisplay ? `${topInset}px` : 16,
+            left: isRoundDisplay ? `${sideInset}px` : 16,
+            right: isRoundDisplay ? `${sideInset}px` : 16
+          }}
+        >
           <Typography variant="body2" color="error">
             {rendererError}
           </Typography>

@@ -8,7 +8,7 @@
     "Anton Ashyn",
     "Lasse Heitgres"
   ],
-  "homepage": "https://f-io.dev",
+  "homepage": "https://github.com/shapecon/carpi",
   "packageManager": "pnpm@10.32.1",
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -34,10 +34,12 @@
     "build:app": "electron-vite build",
     "build": "pnpm run typecheck && pnpm run build:app",
     "postinstall": "electron-builder install-app-deps",
-    "build:mac": "pnpm run build:app && electron-builder --mac --arm64 --publish never --config",
-    "build:linux": "pnpm run build:app && electron-builder --linux --publish never --config",
-    "build:armLinux": "pnpm run build:app && electron-builder --linux AppImage --arm64 --publish never --config",
-    "build:win": "pnpm run build && electron-builder --win --publish never --config",
+    "build:mac": "pnpm run build:app && electron-builder --mac --arm64 --publish always",
+    "build:linux": "pnpm run build:app && electron-builder --linux --publish always",
+    "build:armLinux": "pnpm run build:app && electron-builder --linux AppImage --arm64 --publish always",
+    "build:win": "pnpm run build && electron-builder --win --publish always",
+    "build:mac:local": "pnpm run build:app && electron-builder --mac --arm64 --publish never",
+    "build:linux:local": "pnpm run build:app && electron-builder --linux --publish never",
     "test": "pnpm run test:main && pnpm run test:renderer",
     "test:main": "jest --watchman=false --config jest.config.js",
     "test:renderer": "jest --watchman=false --config jest.web.config.js",

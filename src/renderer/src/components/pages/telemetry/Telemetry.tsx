@@ -10,12 +10,14 @@ import { useKeyboardNavigation } from './hooks/useKeyboardNavigation'
 import { FC, useContext, useEffect, useState } from 'react'
 import { clamp } from '@utils/index'
 import { useNavbarHidden } from '@renderer/hooks/useNavbarHidden'
+import { useRoundLayoutMetrics } from '@renderer/hooks'
 
 export const Telemetry: FC = () => {
   const theme = useTheme()
   const settings = useLiviStore((s) => s.settings)
   const { onSetAppContext } = useContext(AppContext)
   const [index, setIndex] = useState(0)
+  const { isRoundDisplay, sideInset, topInset, contentBottomInset } = useRoundLayoutMetrics()
 
   const { dashboards } = normalizeDashComponents(settings?.telemetryDashboards)
   const { isNavbarHidden } = useNavbarHidden()
@@ -86,11 +88,23 @@ export const Telemetry: FC = () => {
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
     >
-      {dashboards.length ? (
-        <>{renderDashboard()[index]?.Component || <DashboardFallback />}</>
-      ) : (
-        <DashboardFallback message="No dashboards enabled" />
-      )}
+      <Box
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          pt: isRoundDisplay ? `${topInset}px` : 0,
+          pb: isRoundDisplay ? `${contentBottomInset}px` : 0,
+          pl: isRoundDisplay ? `${sideInset}px` : 0,
+          pr: isRoundDisplay ? `${sideInset}px` : 0,
+          boxSizing: 'border-box'
+        }}
+      >
+        {dashboards.length ? (
+          <>{renderDashboard()[index]?.Component || <DashboardFallback />}</>
+        ) : (
+          <DashboardFallback message="No dashboards enabled" />
+        )}
+      </Box>
 
       {dashboards.length > 1 && (
         <DashboardsPagination
@@ -98,6 +112,7 @@ export const Telemetry: FC = () => {
           dotsLength={Number(dashboards.length)}
           onSetIndex={setIndex}
           isNavbarHidden={isNavbarHidden}
+          bottomOffset={isRoundDisplay ? Math.max(14, contentBottomInset - 24) : undefined}
         />
       )}
     </Box>

@@ -127,6 +127,7 @@ export const AppLayout: FC<PropsWithChildren<AppLayoutProps>> = ({
         height: '100dvh',
         touchAction: 'none',
         display: 'flex',
+        position: 'relative',
         flexDirection: isRoundDisplay ? 'column' : layoutDirection,
         ...(isRoundDisplay
           ? {

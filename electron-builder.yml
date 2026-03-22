@@ -1,4 +1,4 @@
-appId: dev.f-io.livi
+appId: io.github.shapecon.carpi
 productName: LIVI
 
 directories:
@@ -26,7 +26,7 @@ linux:
   target:
     - AppImage
   icon: icons/linux/livi.png
-  maintainer: 'Lasse Heitgres <hello@f-io.dev>'
+  maintainer: 'shapecon'
   category: Utility
 
 mac:
@@ -49,7 +49,10 @@ appImage:
 npmRebuild: false
 
 copyright: 'Copyright © 2026 Lasse Heitgres'
-publish: null
+publish:
+  provider: github
+  owner: shapecon
+  repo: carpi
 
 win:
   target:

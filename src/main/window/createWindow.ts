@@ -5,6 +5,7 @@ import { join } from 'path'
 import {
   applyAspectRatioFullscreen,
   applyAspectRatioWindowed,
+  applyFixedWindowContentSize,
   applyWindowedContentSize,
   attachKioskStateSync,
   currentKiosk,
@@ -12,6 +13,7 @@ import {
   persistKioskAndBroadcast
 } from './utils'
 import { runtimeStateProps, ServicesProps } from '@main/types'
+import { FIXED_WINDOW_SIZE } from '@main/constants'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -20,8 +22,8 @@ export function createMainWindow(runtimeState: runtimeStateProps, services: Serv
   const isMac = isMacPlatform()
 
   mainWindow = new BrowserWindow({
-    width: runtimeState.config.width,
-    height: runtimeState.config.height,
+    width: runtimeState.config.kiosk ? runtimeState.config.width : FIXED_WINDOW_SIZE,
+    height: runtimeState.config.kiosk ? runtimeState.config.height : FIXED_WINDOW_SIZE,
     frame: isMac ? true : !runtimeState.config.kiosk,
     useContentSize: true,
     kiosk: isMac ? false : runtimeState.config.kiosk,
@@ -29,6 +31,7 @@ export function createMainWindow(runtimeState: runtimeStateProps, services: Serv
     backgroundColor: '#000',
     fullscreenable: true,
     simpleFullscreen: false,
+    resizable: runtimeState.config.kiosk,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -69,9 +72,13 @@ export function createMainWindow(runtimeState: runtimeStateProps, services: Serv
     if (!mainWindow) return
 
     if (isMac) {
-      const baseW = runtimeState.config.width || 800
-      const baseH = runtimeState.config.height || 480
-      applyWindowedContentSize(mainWindow, baseW, baseH)
+      if (runtimeState.config.kiosk) {
+        const baseW = runtimeState.config.width || 800
+        const baseH = runtimeState.config.height || 480
+        applyWindowedContentSize(mainWindow, baseW, baseH)
+      } else {
+        applyFixedWindowContentSize(mainWindow, FIXED_WINDOW_SIZE)
+      }
       mainWindow.show()
       if (runtimeState.config.kiosk) setImmediate(() => mainWindow!.setFullScreen(true))
     } else {
@@ -80,7 +87,7 @@ export function createMainWindow(runtimeState: runtimeStateProps, services: Serv
         applyAspectRatioWindowed(mainWindow, 0, 0)
         fitWindowToWorkArea(mainWindow)
       } else {
-        applyWindowedContentSize(mainWindow, runtimeState.config.width, runtimeState.config.height)
+        applyFixedWindowContentSize(mainWindow, FIXED_WINDOW_SIZE)
       }
       mainWindow.show()
     }

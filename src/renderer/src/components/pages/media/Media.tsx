@@ -8,6 +8,7 @@ import {
   useOptimisticPlaying,
   usePressFeedback
 } from './hooks'
+import { useRoundLayoutMetrics } from '@renderer/hooks'
 import { clamp } from './utils'
 import { ProgressBar, Controls } from './components'
 import { EXTRA_SMALL_SCREEN, MIN_SCREEN_SIZE_FOR_ATRWORK, MIN_TEXT_COL } from './constants'
@@ -23,17 +24,21 @@ const FFTSpectrum = lazy(() =>
 
 export const Media = () => {
   const isStreaming = useStatusStore((s: { isStreaming: boolean }) => s.isStreaming)
+  const { isRoundDisplay, sideInset, topInset, contentBottomInset, safeDiameter } =
+    useRoundLayoutMetrics()
 
   // const top = useBelowNavTop()
   const [rootRef, { w, h }] = useElementSize<HTMLDivElement>()
   const { snap, livePlayMs } = useMediaState(isStreaming)
+  const layoutW = isRoundDisplay ? Math.max(0, w - sideInset * 2) : w
+  const layoutH = isRoundDisplay ? Math.max(0, h - topInset - contentBottomInset) : h
 
   // Scales (base)
   const { titlePx, artistPx, albumPx, pagePad, colGap, sectionGap, ctrlSize, ctrlGap, progressH } =
-    mediaScaleOps({ w, h })
+    mediaScaleOps({ w: layoutW, h: layoutH })
 
   // Tiny-screen helpers (e.g. 320x240)
-  const isTinyHeight = h > 0 && h <= 320
+  const isTinyHeight = layoutH > 0 && layoutH <= 320
   const textScale = isTinyHeight ? 0.88 : 1
 
   // Clamp padding on tiny screens, otherwise the progress bar has no space left
@@ -48,14 +53,14 @@ export const Media = () => {
   const progressHScaled = Math.max(6, Math.round(progressH * (isTinyHeight ? 0.85 : 1)))
 
   // Compute usable inner width (hard clamp) for anything that must not overflow
-  const innerMaxWidth = Math.max(0, Math.floor(w - pagePadClamped * 2))
+  const innerMaxWidth = Math.max(0, Math.floor(layoutW - pagePadClamped * 2))
 
   // Layout + artwork
   const { canTwoCol, artPx, innerW } = mediaLayoutArtworksOps({
     ctrlSize,
     progressH: progressHScaled,
-    w,
-    h,
+    w: layoutW,
+    h: layoutH,
     pagePad: pagePadClamped,
     colGap,
     titlePx: titlePxScaled,
@@ -219,8 +224,20 @@ export const Media = () => {
   // Always show progress bar (unless payload error)
   const showProgressBar = !mediaPayloadError
 
-  const ART_ROUND = canTwoCol ? 34 : 18
+  const effectiveCanTwoCol = canTwoCol && !isRoundDisplay
+  const ART_ROUND = effectiveCanTwoCol ? 34 : 18
   const fftPad = Math.max(8, Math.round(artPx * 0.06))
+  const shellPadX = isRoundDisplay ? Math.max(sideInset, pagePadClamped) : pagePadClamped
+  const shellPadTop = isRoundDisplay ? Math.max(topInset, pagePadClamped) : pagePadClamped
+  const shellPadBottom = isRoundDisplay
+    ? Math.max(contentBottomInset, pagePadClamped)
+    : pagePadClamped
+  const contentMaxWidth = isRoundDisplay
+    ? Math.min(innerMaxWidth, Math.max(220, Math.round(safeDiameter * 0.78)))
+    : innerMaxWidth
+  const dockMaxWidth = isRoundDisplay
+    ? Math.min(layoutW, Math.max(240, Math.round(safeDiameter * 0.78)))
+    : undefined
 
   // IMPORTANT:
   // - We keep rounded clipping ONLY for artwork.
@@ -324,14 +341,17 @@ export const Media = () => {
         display: 'flex',
         flexDirection: 'column',
         minHeight: 0,
-        padding: pagePadClamped,
+        paddingLeft: shellPadX,
+        paddingRight: shellPadX,
+        paddingTop: shellPadTop,
+        paddingBottom: shellPadBottom,
         boxSizing: 'border-box',
         overflow: 'hidden'
       }}
     >
       {/* CONTENT */}
       <div style={{ flex: 1, minHeight: 0 }}>
-        {canTwoCol ? (
+        {effectiveCanTwoCol ? (
           <div
             style={{
               height: '100%',
@@ -350,7 +370,8 @@ export const Media = () => {
                 justifyContent: 'center',
                 gap: sectionGap,
                 minHeight: 0,
-                paddingLeft: textSidePad
+                paddingLeft: textSidePad,
+                maxWidth: contentMaxWidth
               }}
             >
               <div style={{ maxWidth: innerMaxWidth, overflow: 'hidden' }}>
@@ -404,10 +425,12 @@ export const Media = () => {
               gap: sectionGap,
               minHeight: 0,
               paddingLeft: textSidePad,
-              paddingRight: textSidePad
+              paddingRight: textSidePad,
+              alignItems: isRoundDisplay ? 'center' : 'stretch',
+              textAlign: isRoundDisplay ? 'center' : 'left'
             }}
           >
-            <div style={{ maxWidth: innerMaxWidth, overflow: 'hidden' }}>
+            <div style={{ maxWidth: contentMaxWidth, overflow: 'hidden' }}>
               <div
                 style={{
                   fontSize: `${titlePxScaled}px`,
@@ -467,12 +490,24 @@ export const Media = () => {
           gridAutoRows: 'auto',
           rowGap: isTinyHeight ? 8 : 10,
           paddingBottom: isTinyHeight ? 6 : '1rem',
+          justifyItems: 'center',
           width: '100%',
           boxSizing: 'border-box'
         }}
       >
         {/* Always center controls */}
-        <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            width: '100%',
+            maxWidth: dockMaxWidth,
+            padding: isRoundDisplay ? '10px 14px' : 0,
+            borderRadius: isRoundDisplay ? 999 : 0,
+            background: isRoundDisplay ? 'rgba(255,255,255,0.08)' : 'transparent',
+            backdropFilter: isRoundDisplay ? 'blur(10px)' : 'none'
+          }}
+        >
           <Controls
             ctrlGap={ctrlGap}
             ctrlSize={ctrlSize}
@@ -493,7 +528,13 @@ export const Media = () => {
 
         {/* Always render progress bar (unless payload error) */}
         {showProgressBar && (
-          <div style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
+          <div
+            style={{
+              width: '100%',
+              maxWidth: dockMaxWidth ?? '100%',
+              boxSizing: 'border-box'
+            }}
+          >
             <ProgressBar
               elapsedMs={elapsedMs}
               progressH={progressHScaled}

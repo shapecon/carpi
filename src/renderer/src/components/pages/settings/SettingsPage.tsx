@@ -21,6 +21,7 @@ export function SettingsPage() {
   const isDongleConnected = useStatusStore((s) => s.isDongleConnected)
 
   const path = splat ? splat.split('/') : []
+  const isTopLevelSettings = path.length === 0
   const node = getNodeByPath(settingsSchema, path)
 
   const settings = useLiviStore((s) => s.settings) as ExtraConfig
@@ -76,49 +77,58 @@ export function SettingsPage() {
 
   return (
     <SettingsLayout title={title} showRestart={showRestart} onRestart={handleRestart}>
-      {children.map((child: SettingsNode<ExtraConfig>, index: Key | null | undefined) => {
-        const _path = child.path as string
+      <Box
+        sx={{
+          display: 'grid',
+          gap: isTopLevelSettings ? 'clamp(8px, 1.6svh, 12px)' : 0,
+          pt: isTopLevelSettings ? 'clamp(2px, 0.9svh, 8px)' : 0
+        }}
+      >
+        {children.map((child: SettingsNode<ExtraConfig>, index: Key | null | undefined) => {
+          const _path = child.path as string
 
-        if (child.type === 'route') {
-          return (
-            <StackItem
-              key={index}
-              withForwardIcon
-              node={child}
-              onClick={() => navigate(child.route)}
-            >
-              <Typography>{child.labelKey ? t(child.labelKey) : child.label}</Typography>
-            </StackItem>
-          )
-        }
+          if (child.type === 'route') {
+            return (
+              <StackItem
+                key={index}
+                variant={isTopLevelSettings ? 'category' : 'default'}
+                withForwardIcon
+                node={child}
+                onClick={() => navigate(child.route)}
+              >
+                <Typography>{child.labelKey ? t(child.labelKey) : child.label}</Typography>
+              </StackItem>
+            )
+          }
 
-        if (child.type === 'custom') {
+          if (child.type === 'custom') {
+            return (
+              <child.component
+                key={child.label}
+                state={settings}
+                node={child}
+                onChange={(v) => handleFieldChange(_path, v)}
+                requestRestart={requestRestart}
+              />
+            )
+          }
+
+          if (child.type === 'keybinding') {
+            return <KeyBindingRow key={`${_path}:${child.label}`} node={child} />
+          }
+
           return (
-            <child.component
-              key={child.label}
-              state={settings}
+            <SettingsFieldRow
+              key={_path}
               node={child}
+              state={state}
+              value={getValueByPath(state, _path)}
               onChange={(v) => handleFieldChange(_path, v)}
-              requestRestart={requestRestart}
+              onClick={child.page ? () => navigate(_path) : undefined}
             />
           )
-        }
-
-        if (child.type === 'keybinding') {
-          return <KeyBindingRow key={`${_path}:${child.label}`} node={child} />
-        }
-
-        return (
-          <SettingsFieldRow
-            key={_path}
-            node={child}
-            state={state}
-            value={getValueByPath(state, _path)}
-            onChange={(v) => handleFieldChange(_path, v)}
-            onClick={child.page ? () => navigate(_path) : undefined}
-          />
-        )
-      })}
+        })}
+      </Box>
     </SettingsLayout>
   )
 }

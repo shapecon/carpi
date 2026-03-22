@@ -10,6 +10,7 @@ import { applyNullDeletes, pushSettingsToRenderer, sizesEqual } from '@main/util
 import {
   applyAspectRatioFullscreen,
   applyAspectRatioWindowed,
+  applyFixedWindowContentSize,
   applyWindowedContentSize,
   fitWindowToWorkArea
 } from '@main/window/utils'
@@ -114,11 +115,7 @@ export function saveSettings(runtimeState: runtimeStateProps, next: Partial<Extr
       } else {
         if (isFs) mainWindow.setFullScreen(false)
         if (sizeChanged) {
-          applyWindowedContentSize(
-            mainWindow,
-            runtimeState.config.width || 800,
-            runtimeState.config.height || 480
-          )
+          applyFixedWindowContentSize(mainWindow)
         }
       }
     } else if (sizeChanged) {
@@ -134,11 +131,7 @@ export function saveSettings(runtimeState: runtimeStateProps, next: Partial<Extr
           runtimeState.config.height || 480
         )
       } else {
-        applyWindowedContentSize(
-          mainWindow,
-          runtimeState.config.width || 800,
-          runtimeState.config.height || 480
-        )
+        applyFixedWindowContentSize(mainWindow)
       }
     }
   } else {
@@ -153,20 +146,20 @@ export function saveSettings(runtimeState: runtimeStateProps, next: Partial<Extr
       win.setKiosk(runtimeState.config.kiosk)
 
       if (leavingKiosk) {
-        applyWindowedContentSize(win, runtimeState.config.width, runtimeState.config.height)
+        applyFixedWindowContentSize(win)
 
         // Re-apply bounds once the WM finishes the transition
         const onResize = () => {
           win.removeListener('resize', onResize)
           fitWindowToWorkArea(win)
-          applyWindowedContentSize(win, runtimeState.config.width, runtimeState.config.height)
+          applyFixedWindowContentSize(win)
         }
         win.on('resize', onResize)
 
         setImmediate(() => {
           if (win.isDestroyed()) return
           fitWindowToWorkArea(win)
-          applyWindowedContentSize(win, runtimeState.config.width, runtimeState.config.height)
+          applyFixedWindowContentSize(win)
         })
       } else {
         // entering kiosk
@@ -176,7 +169,7 @@ export function saveSettings(runtimeState: runtimeStateProps, next: Partial<Extr
     }
     // no kiosk change, only size change in windowed mode
     if (sizeChanged && !runtimeState.config.kiosk) {
-      applyWindowedContentSize(win, runtimeState.config.width, runtimeState.config.height)
+      applyFixedWindowContentSize(win)
     }
   }
 }

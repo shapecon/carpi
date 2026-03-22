@@ -2,6 +2,7 @@ import type React from 'react'
 
 export enum RoutePath {
   Camera = 'camera',
+  Clock = 'clock',
   Home = 'home',
   Maps = 'maps',
   Media = 'media',

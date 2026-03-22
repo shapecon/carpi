@@ -1,176 +1,73 @@
-import { useEffect, useRef, useState } from 'react'
-import { Box, useTheme } from '@mui/material'
 import { DashShell } from '../../components/DashShell'
 import { useVehicleTelemetry } from '../../hooks/useVehicleTelemetry'
-import { Speed, Rpm, RpmRing, Gear, CoolantTemp, OilTemp, FuelLevel, NavMini } from '../../widgets'
-import {
-  BASE_W,
-  BASE_H,
-  SPEED_GROUP_LEFT,
-  SPEED_GROUP_TOP,
-  SPEED_GROUP_W,
-  NAV_X,
-  NAV_Y,
-  GEAR_X,
-  GEAR_Y,
-  RPM_RIGHT,
-  RPM_TOP,
-  METRICS_RIGHT,
-  METRICS_TOP
-} from './constants'
+import { useBlinkingTime } from '@renderer/hooks'
+import Box from '@mui/material/Box'
+import { useTheme } from '@mui/material/styles'
 
 export function Dash1() {
   const theme = useTheme()
   const { telemetry } = useVehicleTelemetry()
+  const time = useBlinkingTime()
 
-  const speedKph = typeof telemetry?.speedKph === 'number' ? telemetry.speedKph : 0
-  const rpm = typeof telemetry?.rpm === 'number' ? telemetry.rpm : 0
-  const coolantC = typeof telemetry?.coolantC === 'number' ? telemetry.coolantC : 0
-  const oilC = typeof telemetry?.oilC === 'number' ? telemetry.oilC : 0
-  const fuelPct = typeof telemetry?.fuelPct === 'number' ? telemetry.fuelPct : 0
-
-  const gear: string | number = telemetry?.gear ?? 'P'
-
-  const hostRef = useRef<HTMLDivElement | null>(null)
-  const [scale, setScale] = useState(1)
-
-  useEffect(() => {
-    const el = hostRef.current
-    if (!el) return
-
-    const ro = new ResizeObserver(([entry]) => {
-      const r = entry?.contentRect
-      if (!r) return
-      const s = Math.min(r.width / BASE_W, r.height / BASE_H)
-      setScale(Number.isFinite(s) && s > 0 ? s : 1)
-    })
-
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
+  const speedKph = typeof telemetry?.speedKph === 'number' ? Math.round(telemetry.speedKph) : 0
 
   return (
     <DashShell>
       <Box
-        ref={hostRef}
         sx={{
           width: '100%',
           height: '100%',
-          position: 'relative',
-          overflow: 'hidden'
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 2
         }}
       >
-        {/* scaled stage */}
+        {/* Time */}
         <Box
           sx={{
-            position: 'absolute',
-            left: '50%',
-            top: '50%',
-            width: BASE_W,
-            height: BASE_H,
-            transform: `translate(-50%, -50%) scale(${scale})`,
-            transformOrigin: 'center',
-            transition: 'transform 0.05s ease-out'
+            fontSize: 'clamp(1.4rem, 6vw, 2.4rem)',
+            fontWeight: 300,
+            letterSpacing: '0.12em',
+            color: theme.palette.text.secondary,
+            lineHeight: 1
           }}
         >
-          {/* SPEED + RING GROUP */}
+          {time}
+        </Box>
+
+        {/* Speed */}
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            lineHeight: 1
+          }}
+        >
           <Box
             sx={{
-              position: 'absolute',
-              left: SPEED_GROUP_LEFT,
-              top: SPEED_GROUP_TOP,
-              width: SPEED_GROUP_W,
-              height: 640
+              fontSize: 'clamp(4rem, 18vw, 8rem)',
+              fontWeight: 700,
+              letterSpacing: '-0.02em',
+              color: theme.palette.text.primary,
+              lineHeight: 1,
+              fontVariantNumeric: 'tabular-nums'
             }}
           >
-            <Box
-              sx={{
-                position: 'absolute',
-                inset: 0,
-                pointerEvents: 'none',
-                transform: 'translate(-36px, -22px)',
-                transformOrigin: 'center'
-              }}
-            >
-              <RpmRing
-                rpm={rpm}
-                maxRpm={5000}
-                redlineRpm={4500}
-                ticks={44}
-                startDeg={90}
-                arcDeg={240}
-                colorOff={theme.palette.text.disabled}
-                colorOn={theme.palette.text.primary}
-                colorRedline={theme.palette.error.main}
-              />
-            </Box>
-
-            <Box
-              sx={{
-                position: 'absolute',
-                left: '50%',
-                top: '50%',
-                transform: 'translate(-50%, -50%)'
-              }}
-            >
-              <Speed speedKph={speedKph} />
-            </Box>
+            {speedKph}
           </Box>
-
-          {/* NAV MINI — centered on stage */}
           <Box
             sx={{
-              position: 'absolute',
-              left: NAV_X,
-              top: NAV_Y,
-              transform: 'translate(-50%, -50%)',
-              width: 220,
-              height: 120,
-              display: 'grid',
-              placeItems: 'center'
+              fontSize: 'clamp(0.65rem, 2.2vw, 1rem)',
+              fontWeight: 400,
+              letterSpacing: '0.25em',
+              color: theme.palette.text.disabled,
+              mt: 0.5
             }}
           >
-            <NavMini iconSize={84} />
-          </Box>
-
-          {/* GEAR */}
-          <Box
-            sx={{
-              position: 'absolute',
-              left: GEAR_X,
-              top: GEAR_Y,
-              transform: 'translate(-50%, -50%)',
-              width: 110,
-              height: 120,
-              display: 'grid',
-              placeItems: 'center'
-            }}
-          >
-            <Gear gear={gear} />
-          </Box>
-
-          {/* RPM */}
-          <Box sx={{ position: 'absolute', right: RPM_RIGHT, top: RPM_TOP }}>
-            <Rpm rpm={rpm} />
-          </Box>
-
-          {/* RIGHT METRICS COLUMN (coolant / oil / fuel) */}
-          <Box
-            sx={{
-              position: 'absolute',
-              right: METRICS_RIGHT,
-              top: METRICS_TOP,
-              width: 'fit-content',
-              display: 'grid',
-              rowGap: 1.6,
-              justifyItems: 'end',
-              transform: 'scale(1.45)',
-              transformOrigin: 'right top'
-            }}
-          >
-            <CoolantTemp coolantC={coolantC} />
-            <OilTemp oilC={oilC} />
-            <FuelLevel fuelPct={fuelPct} />
+            KM/H
           </Box>
         </Box>
       </Box>

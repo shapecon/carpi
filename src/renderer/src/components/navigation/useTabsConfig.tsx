@@ -7,7 +7,6 @@ import { useStatusStore, useLiviStore } from '../../store/store'
 import CropPortraitOutlinedIcon from '@mui/icons-material/CropPortraitOutlined'
 import PlayCircleOutlinedIcon from '@mui/icons-material/PlayCircleOutlined'
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
-import CameraswitchOutlinedIcon from '@mui/icons-material/CameraswitchOutlined'
 import MapOutlinedIcon from '@mui/icons-material/MapOutlined'
 import SpeedOutlinedIcon from '@mui/icons-material/SpeedOutlined'
 
@@ -15,7 +14,6 @@ export const useTabsConfig: (receivingVideo: boolean) => TabConfig[] = (receivin
   const theme = useTheme()
   const isStreaming = useStatusStore((s) => s.isStreaming)
   const isDongleConnected = useStatusStore((s) => s.isDongleConnected)
-  const cameraFound = useStatusStore((s) => s.cameraFound)
   const mapsEnabled = useLiviStore((s) => s.settings?.mapsEnabled ?? false)
   const telemetryEnabled = useLiviStore((s) => s.settings?.telemetryEnabled ?? false)
 
@@ -56,6 +54,7 @@ export const useTabsConfig: (receivingVideo: boolean) => TabConfig[] = (receivin
           }
         ]
       : []),
+    { label: 'Media', path: ROUTES.MEDIA, icon: <PlayCircleOutlinedIcon sx={{ fontSize: 30 }} /> },
     ...(telemetryEnabled
       ? [
           {
@@ -65,13 +64,6 @@ export const useTabsConfig: (receivingVideo: boolean) => TabConfig[] = (receivin
           }
         ]
       : []),
-    { label: 'Media', path: ROUTES.MEDIA, icon: <PlayCircleOutlinedIcon sx={{ fontSize: 30 }} /> },
-    {
-      label: 'Camera',
-      path: ROUTES.CAMERA,
-      icon: <CameraswitchOutlinedIcon sx={{ fontSize: 30 }} />,
-      disabled: !cameraFound
-    },
     {
       label: 'Settings',
       path: ROUTES.SETTINGS,

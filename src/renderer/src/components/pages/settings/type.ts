@@ -5,6 +5,7 @@ import type { ExtraConfig } from '@shared/types'
 export interface StackItemProps {
   children?: ReactNode
   withForwardIcon?: boolean
+  variant?: 'default' | 'category'
   value?: unknown
   showValue?: boolean
   onClick?: () => void

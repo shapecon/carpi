@@ -1,4 +1,5 @@
 export * from './camera'
+export * from './clock'
 export * from './projection'
 export * from './home'
 export * from './maps'
