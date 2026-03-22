@@ -2,7 +2,7 @@ import { app } from 'electron'
 import type { ExtraConfig } from '@shared/types'
 import { ICON_120_B64, ICON_180_B64, ICON_256_B64 } from '@shared/assets/carIcons'
 import { currentKiosk } from '@main/window/utils'
-import { pickAssetForPlatform } from '@main/ipc/update/pickAsset'
+import { buildExpectedAssetUrlForPlatform, pickAssetForPlatform } from '@main/ipc/update/pickAsset'
 import { GhRelease, runtimeStateProps } from '@main/types'
 import { configEvents, saveSettings } from '@main/ipc/utils'
 import { registerIpcHandle } from '@main/ipc/register'
@@ -49,7 +49,10 @@ export function registerSettingsIpc(runtimeState: runtimeStateProps) {
       const json = (await res.json()) as unknown as GhRelease
       const raw = (json.tag_name || json.name || '').toString()
       const version = raw.replace(/^v/i, '')
-      const { url } = pickAssetForPlatform(json.assets || [])
+      const { url } =
+        pickAssetForPlatform(json.assets || []).url != null
+          ? pickAssetForPlatform(json.assets || [])
+          : buildExpectedAssetUrlForPlatform(repo, version)
       return { version, url }
     } catch (e) {
       console.warn('[update] getLatestRelease failed:', e)

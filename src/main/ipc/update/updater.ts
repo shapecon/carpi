@@ -1,6 +1,6 @@
 import { installOnMacFromFile } from '@main/ipc/update/install.mac'
 import { installOnLinuxFromFile } from '@main/ipc/update/install.linux'
-import { pickAssetForPlatform } from '@main/ipc/update/pickAsset'
+import { buildExpectedAssetUrlForPlatform, pickAssetForPlatform } from '@main/ipc/update/pickAsset'
 import { sendUpdateEvent, sendUpdateProgress } from '@main/ipc/utils'
 import { join } from 'path'
 import { downloadWithProgress } from '@main/ipc/update/downloader'
@@ -39,7 +39,11 @@ export class Updater {
         const res = await fetch(feed, { headers: { 'User-Agent': 'LIVI-updater' } })
         if (!res.ok) throw new Error(`feed ${res.status}`)
         const json = (await res.json()) as unknown as GhRelease
-        url = pickAssetForPlatform(json.assets || []).url
+        const raw = (json.tag_name || json.name || '').toString()
+        const version = raw.replace(/^v/i, '')
+        url =
+          pickAssetForPlatform(json.assets || []).url ??
+          buildExpectedAssetUrlForPlatform(repo, version).url
       }
       if (!url) throw new Error('No asset found for platform')
 

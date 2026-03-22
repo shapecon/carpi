@@ -1,4 +1,4 @@
-import { pickAssetForPlatform } from '@main/ipc/update/pickAsset'
+import { buildExpectedAssetUrlForPlatform, pickAssetForPlatform } from '@main/ipc/update/pickAsset'
 
 function setPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', { value: platform })
@@ -67,5 +67,23 @@ describe('pickAssetForPlatform', () => {
     ])
 
     expect(result).toEqual({})
+  })
+
+  test('builds fallback arm64 AppImage url on linux arm64', () => {
+    setPlatform('linux')
+    setArch('arm64')
+
+    expect(buildExpectedAssetUrlForPlatform('shapecon/carpi', '5.6.5')).toEqual({
+      url: 'https://github.com/shapecon/carpi/releases/download/v5.6.5/carpi-5.6.5-arm64.AppImage'
+    })
+  })
+
+  test('builds fallback x64 AppImage url on linux x64', () => {
+    setPlatform('linux')
+    setArch('x64')
+
+    expect(buildExpectedAssetUrlForPlatform('shapecon/carpi', '5.6.5')).toEqual({
+      url: 'https://github.com/shapecon/carpi/releases/download/v5.6.5/carpi-5.6.5-x86_64.AppImage'
+    })
   })
 })

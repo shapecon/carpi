@@ -35,3 +35,37 @@ export function pickAssetForPlatform(assets: GhAsset[]): { url?: string } {
 
   return {}
 }
+
+export function buildExpectedAssetUrlForPlatform(repo: string, version: string): { url?: string } {
+  const cleanVersion = version.replace(/^v/i, '').trim()
+  if (!cleanVersion) return {}
+
+  const tag = `v${cleanVersion}`
+  const base = `https://github.com/${repo}/releases/download/${tag}`
+
+  if (process.platform === 'darwin') {
+    if (process.arch === 'arm64') {
+      return { url: `${base}/carpi-${cleanVersion}-arm64.dmg` }
+    }
+
+    if (process.arch === 'x64') {
+      return { url: `${base}/carpi-${cleanVersion}-x64.dmg` }
+    }
+
+    return {}
+  }
+
+  if (process.platform === 'linux') {
+    if (process.arch === 'arm64') {
+      return { url: `${base}/carpi-${cleanVersion}-arm64.AppImage` }
+    }
+
+    if (process.arch === 'x64') {
+      return { url: `${base}/carpi-${cleanVersion}-x86_64.AppImage` }
+    }
+
+    return {}
+  }
+
+  return {}
+}
