@@ -74,11 +74,8 @@ jobs:
           };
 
           if (eventName === 'workflow_run') {
-            // main: always build everything
-            add('x86_64', 'ubuntu-latest',  'native',   'AppImage');
+            // main: only build arm64 AppImage automatically
             add('arm64',  'ubuntu-latest',  'emulated', 'AppImage');
-            add('darwin', 'macos-latest',   'native',   'dmg');
-            add('win-x64','windows-latest', 'native',   'exe');
           } else {
             // manual: only selected
             if (inputs.linux_x86_64) add('x86_64', 'ubuntu-latest',  'native',   'AppImage');
