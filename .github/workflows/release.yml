@@ -2,16 +2,6 @@ name: release
 
 on:
   workflow_dispatch:
-    inputs:
-      bump:
-        description: 'Version bump type'
-        required: true
-        default: patch
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
 
 jobs:
   release:
@@ -35,7 +25,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          NEW_VERSION=$(npm version ${{ inputs.bump }} --no-git-tag-version | tr -d 'v')
+          NEW_VERSION=$(npm version patch --no-git-tag-version | tr -d 'v')
           echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
           git add package.json
           git commit -m "chore: release v${NEW_VERSION}"
