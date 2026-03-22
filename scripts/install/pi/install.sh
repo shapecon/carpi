@@ -7,7 +7,7 @@ set -euo pipefail
 
 # 0) Variables
 USER_HOME="$HOME"
-APPIMAGE_PATH="$USER_HOME/LIVI/LIVI.AppImage"
+APPIMAGE_PATH="$USER_HOME/carpi/carpi.AppImage"
 APPIMAGE_DIR="$(dirname "$APPIMAGE_PATH")"
 
 echo "→ Creating target directory: $APPIMAGE_DIR"
@@ -58,7 +58,7 @@ fi
 echo "→ Fetching latest LIVI release"
 latest_url=$(curl -s https://api.github.com/repos/shapecon/carpi/releases/latest \
   | grep "browser_download_url" \
-  | grep "arm64.AppImage" \
+  | grep "arm64.AppImage\|aarch64.AppImage" \
   | cut -d '"' -f 4)
 
 if [ -z "$latest_url" ]; then
@@ -82,17 +82,17 @@ echo "→ Creating autostart entry"
 AUTOSTART_DIR="$USER_HOME/.config/autostart"
 mkdir -p "$AUTOSTART_DIR"
 
-cat > "$AUTOSTART_DIR/LIVI.desktop" <<EOF
+cat > "$AUTOSTART_DIR/carpi.desktop" <<EOF
 [Desktop Entry]
 Type=Application
-Name=LIVI
+Name=carpi
 Exec=$APPIMAGE_PATH
 Icon=${ICON_DEST:-livi}
 Terminal=false
 X-GNOME-Autostart-enabled=true
 Categories=AudioVideo;
 EOF
-echo "Autostart entry at $AUTOSTART_DIR/LIVI.desktop"
+echo "Autostart entry at $AUTOSTART_DIR/carpi.desktop"
 
 # Create Desktop shortcut
 echo "→ Creating desktop shortcut"
@@ -103,11 +103,11 @@ else
 fi
 
 mkdir -p "$DESKTOP_DIR"
-cat > "$DESKTOP_DIR/LIVI.desktop" <<EOF
+cat > "$DESKTOP_DIR/carpi.desktop" <<EOF
 [Desktop Entry]
 Type=Application
-Name=LIVI
-Comment=Launch LIVI AppImage
+Name=carpi
+Comment=Launch carpi AppImage
 Exec=$APPIMAGE_PATH
 Icon=${ICON_DEST:-livi}
 Terminal=false
@@ -115,7 +115,7 @@ Categories=AudioVideo;
 StartupNotify=false
 EOF
 
-chmod +x "$DESKTOP_DIR/LIVI.desktop"
-echo "Desktop shortcut at $DESKTOP_DIR/LIVI.desktop"
+chmod +x "$DESKTOP_DIR/carpi.desktop"
+echo "Desktop shortcut at $DESKTOP_DIR/carpi.desktop"
 
 echo "✅ Installation complete!"

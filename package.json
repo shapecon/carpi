@@ -1,5 +1,5 @@
 {
-  "name": "LIVI",
+  "name": "carpi",
   "version": "5.6.0",
   "description": "LIVI - Linux In-Vehicle Infotainment",
   "main": "./out/main/main.js",
