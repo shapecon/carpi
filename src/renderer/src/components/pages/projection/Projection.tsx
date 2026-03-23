@@ -98,7 +98,7 @@ const CarplayComponent: React.FC<CarplayProps> = ({
   }, [pathname])
 
   const theme = useTheme()
-  const { isRoundDisplay, circleSize } = useRoundLayoutMetrics()
+  const { isRoundDisplay, circleSize, safeDiameter } = useRoundLayoutMetrics()
 
   // Zustand store
   const isStreaming = useStatusStore((s) => s.isStreaming)
@@ -942,24 +942,17 @@ const CarplayComponent: React.FC<CarplayProps> = ({
   const resolvedNegotiatedWidth = negotiatedWidth ?? 0
   const resolvedNegotiatedHeight = negotiatedHeight ?? 0
 
-  const projectionAspect =
-    resolvedNegotiatedWidth > 0 && resolvedNegotiatedHeight > 0
-      ? resolvedNegotiatedWidth / resolvedNegotiatedHeight
-      : settings.width > 0 && settings.height > 0
-        ? settings.width / settings.height
-        : 16 / 9
-
   const roundViewportSize = (() => {
     if (!isRoundDisplay) return null
 
-    const usableDiameter = Math.max(0, Math.round(circleSize * 0.94))
-    const safeAspect = projectionAspect > 0 ? projectionAspect : 16 / 9
-    const height = Math.floor(usableDiameter / Math.sqrt(safeAspect * safeAspect + 1))
-    const width = Math.floor(height * safeAspect)
+    const squareSize = Math.min(
+      Math.max(280, Math.round(safeDiameter * 0.98)),
+      Math.max(280, Math.round(circleSize * 0.9))
+    )
 
     return {
-      width: Math.max(220, width),
-      height: Math.max(140, height)
+      width: squareSize,
+      height: squareSize
     }
   })()
 

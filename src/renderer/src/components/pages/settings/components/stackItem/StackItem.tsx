@@ -68,11 +68,9 @@ const Item = styled(Paper, {
 
     // Hover ONLY for real mouse (prevents sticky hover after touch)
     'html[data-input="mouse"] &': {
-      '&:hover': activeRowStyles
+      '&:hover': activeRowStyles,
+      '&:active': activeRowStyles
     },
-
-    // Press feedback (mouse + touch) - same as keyboard highlight
-    '&:active': activeRowStyles,
 
     // Keyboard/D-pad highlight
     '&:focus-visible': {
@@ -117,13 +115,11 @@ const Item = styled(Paper, {
         '&:hover': {
           color: activeColor,
           '+ .stack-item-forward': { color: activeColor, transform: 'translateX(2px)' }
+        },
+        '&:active': {
+          color: activeColor,
+          '+ .stack-item-forward': { color: activeColor, transform: 'translateX(2px)' }
         }
-      },
-
-      // Press feedback (mouse + touch) - same as keyboard highlight
-      '&:active': {
-        color: activeColor,
-        '+ .stack-item-forward': { color: activeColor, transform: 'translateX(2px)' }
       },
 
       // Keyboard highlight
