@@ -945,9 +945,10 @@ const CarplayComponent: React.FC<CarplayProps> = ({
   const roundViewportSize = (() => {
     if (!isRoundDisplay) return null
 
+    const maxSquareInCircle = Math.floor((circleSize / Math.SQRT2) * 0.99)
     const squareSize = Math.min(
-      Math.max(280, Math.round(safeDiameter * 0.98)),
-      Math.max(280, Math.round(circleSize * 0.9))
+      Math.max(280, Math.round(safeDiameter)),
+      Math.max(280, maxSquareInCircle)
     )
 
     return {

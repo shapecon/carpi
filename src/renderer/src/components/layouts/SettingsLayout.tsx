@@ -24,6 +24,13 @@ export const SettingsLayout = ({
   const { viewport, isRoundDisplay, circularInset, safeDiameter, topInset, contentBottomInset } =
     useRoundLayoutMetrics()
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const touchGestureRef = useRef({
+    active: false,
+    moved: false,
+    x: 0,
+    y: 0,
+    suppressClicksUntil: 0
+  })
   const [fadeState, setFadeState] = useState({ top: false, bottom: false })
 
   //const handleNavigate = () => navigate(-1)
@@ -35,6 +42,53 @@ export const SettingsLayout = ({
 
   const showBack = location.pathname !== '/settings'
   const showHeader = !(isRoundDisplay && location.pathname === '/settings')
+
+  const suppressTouchClicks = (durationMs = 380) => {
+    touchGestureRef.current.suppressClicksUntil = Math.max(
+      touchGestureRef.current.suppressClicksUntil,
+      window.performance.now() + durationMs
+    )
+  }
+
+  const handleScrollPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'mouse') return
+    touchGestureRef.current = {
+      active: true,
+      moved: false,
+      x: e.clientX,
+      y: e.clientY,
+      suppressClicksUntil: touchGestureRef.current.suppressClicksUntil
+    }
+  }
+
+  const handleScrollPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!touchGestureRef.current.active) return
+
+    const dx = Math.abs(e.clientX - touchGestureRef.current.x)
+    const dy = Math.abs(e.clientY - touchGestureRef.current.y)
+
+    if (dx > 8 || dy > 8) {
+      touchGestureRef.current.moved = true
+      suppressTouchClicks()
+    }
+  }
+
+  const finishScrollGesture = () => {
+    if (!touchGestureRef.current.active) return
+
+    if (touchGestureRef.current.moved) {
+      suppressTouchClicks(420)
+    }
+
+    touchGestureRef.current.active = false
+    touchGestureRef.current.moved = false
+  }
+
+  const handleScrollClickCapture = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (window.performance.now() > touchGestureRef.current.suppressClicksUntil) return
+    e.preventDefault()
+    e.stopPropagation()
+  }
 
   useEffect(() => {
     const el = scrollRef.current
@@ -49,9 +103,16 @@ export const SettingsLayout = ({
       setFadeState((prev) => (prev.top === next.top && prev.bottom === next.bottom ? prev : next))
     }
 
+    const blockClicksDuringScroll = () => {
+      if (touchGestureRef.current.active || touchGestureRef.current.moved) {
+        suppressTouchClicks()
+      }
+    }
+
     updateFades()
 
     el.addEventListener('scroll', updateFades, { passive: true })
+    el.addEventListener('scroll', blockClicksDuringScroll, { passive: true })
     window.addEventListener('resize', updateFades)
 
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateFades) : null
@@ -62,6 +123,7 @@ export const SettingsLayout = ({
 
     return () => {
       el.removeEventListener('scroll', updateFades)
+      el.removeEventListener('scroll', blockClicksDuringScroll)
       window.removeEventListener('resize', updateFades)
       ro?.disconnect()
     }
@@ -300,6 +362,11 @@ export const SettingsLayout = ({
         >
           <Box
             ref={scrollRef}
+            onPointerDown={handleScrollPointerDown}
+            onPointerMove={handleScrollPointerMove}
+            onPointerUp={finishScrollGesture}
+            onPointerCancel={finishScrollGesture}
+            onClickCapture={handleScrollClickCapture}
             sx={{
               width: '100%',
               minHeight: 0,

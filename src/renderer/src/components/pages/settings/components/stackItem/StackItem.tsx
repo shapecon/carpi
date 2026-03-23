@@ -60,6 +60,10 @@ const Item = styled(Paper, {
           : 'inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 0 rgba(255,255,255,0.02)'
         : 'inset 0 1px 0 rgba(255,255,255,0.82)',
     cursor: 'default',
+    userSelect: 'none',
+    WebkitUserSelect: 'none',
+    WebkitTouchCallout: 'none',
+    WebkitTapHighlightColor: 'transparent',
     transition: 'background 140ms ease, border-color 140ms ease, box-shadow 140ms ease',
 
     '& svg': {
